@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EcsAllow",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": [
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalOrgID": "o-txczodrxtj"
+        }
+      }
+    }
+  ]
+}

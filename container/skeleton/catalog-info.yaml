@@ -1,0 +1,17 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.component_name }}
+  description: ${{ values.component_description }}
+  namespace: ${{ values.component_namespace }}
+  annotations:
+    github.com/project-slug: ServerlessOpsIO/${{ values.component_name }}
+spec:
+  type: container-service
+  lifecycle: production
+  owner: ${{ values.owner }}
+  system: ${{ values.system_entity }}
+  dependsOn:
+    - ${{ values.cluster_ref }}
+    - ${{ values.account_entity }}

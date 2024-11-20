@@ -1,0 +1,108 @@
+name: Feature Branch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/*
+
+jobs:
+  build_infra:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Setup job workspace
+        uses: ServerlessOpsIO/gha-setup-workspace@v1
+
+      - name: Assume AWS Credentials
+        uses: ServerlessOpsIO/gha-assume-aws-credentials@v1
+        with:
+          build_aws_account_id: {% raw %}${{ secrets.AWS_CICD_ACCOUNT_ID }}{% endraw %}
+
+      - name: Install AWS SAM
+        uses: aws-actions/setup-sam@v2
+
+
+      - name: Validate template
+        run: sam validate --lint
+
+      - name: Build artifact
+        run: sam build --parallel --template template.yaml
+
+      - name: Store Artifacts
+        uses: ServerlessOpsIO/gha-store-artifacts@v1
+        with:
+          use_aws_sam: true
+
+{% if values.is_nodejs_app %}
+  build_container:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Setup job workspace
+        uses: ServerlessOpsIO/gha-setup-workspace@v1
+
+      - name: Assume AWS Credentials
+        uses: ServerlessOpsIO/gha-assume-aws-credentials@v1
+        with:
+          build_aws_account_id: {% raw %}${{ secrets.AWS_CICD_ACCOUNT_ID }}{% endraw %}
+
+      - name: Setup NodeJS
+        uses: ServerlessOpsIO/gha-setup-node@v1
+        with:
+          node_version_file: src/package.json
+          working_directory: src
+
+      - name: Compile Typescript
+        id: compile
+        shell: bash
+        working-directory: src
+        run: yarn run tsc:full
+
+      - name: Build Application Code
+        id: build
+        shell: bash
+        working-directory: src
+        run: yarn run build:all
+
+      - name: Test Application
+        id: test
+        shell: bash
+        working-directory: src
+        run: yarn run test:all
+
+      - name: Lint Application
+        id: lint
+        shell: bash
+        working-directory: src
+        run: yarn run lint:all
+
+      - name: Build Base Image
+        id: build-image
+        shell: bash
+        working-directory: src
+        run: yarn run build-image
+
+      - name: Build container image
+        uses: kciter/aws-ecr-action@v4
+        with:
+          account_id: {% raw %}${{ secrets.AWS_CICD_ACCOUNT_ID }}{% endraw %}
+          region: {% raw %}${{ env.AWS_REGION }}{% endraw %}
+          tags: {% raw %}${{ env.GITHUB_EVENT_REF_SLUG }},${{ env.GITHUB_SHA_SHORT }},${{ env.GITHUB_SHA }}{% endraw %}
+          repo: {% raw %}${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG}}{% endraw %}
+          create_repo: true
+          path: src
+          dockerfile: src/Dockerfile
+          # FIXME: This is a workaround to deal with how the action works and so we can
+          # continue to use the aws-actions/configure-aws-credentials
+          access_key_id: {% raw %}${{ env.AWS_ACCESS_KEY_ID }}{% endraw %}
+          secret_access_key: {% raw %}${{ env.AWS_SECRET_ACCESS_KEY }}{% endraw %}
+          set_repo_policy: true
+          repo_policy_file: .github/workflows/ecr-policy.json
+{% endif %}

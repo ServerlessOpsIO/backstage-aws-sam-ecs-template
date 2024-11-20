@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  ${{ values.system_title }} ${{ values.component_prefix }} Service
+
+  ${{ values.component_description }}
+
+Parameters:
+  Domain:
+    Type: String
+    Description: 'Application Platform'
+
+  System:
+    Type: String
+    Description: 'Application System'
+
+  Component:
+    Type: String
+    Description: 'Application Component'
+
+  CodeBranch:
+    Type: String
+    Description: 'Name of deployment branch'
+
+  ClusterName:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Name of ECS cluster
+
+  ClusterTaskIamRoleArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: IAM role ARN for task ECS opperations.
+
+{% if values.use_load_balancer %}
+  ClusterAlbListenerArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Name of ECS cluster
+{% endif %}
+
+  ClusterSecurityGroupId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: ID of cluster security group
+
+{% if values.is_nodejs_app %}
+  ContainerRepo:
+    Type: String
+    Description: ECR repository name
+
+  ContainerOrg:
+    Type: String
+    Description: ECR organization name
+{% endif %}
+
+  ContainerImage:
+    Type: String
+    Description: Container image
+
+  ContainerTag:
+    Type: String
+    Description: Container tag
+
+  ContainerCpu:
+    Type: Number
+    Description: Container CPU allocation units. 1024 is 1 CPU. Value may equal fraction of a CPU.
+
+  ContainerMemory:
+    Type: Number
+    Description: Container memory in megabytes
+
+  ContainerDesiredCount:
+    Type: Number
+    Description: How many copies of the service task to run
+
+{% if values.container_port %}
+  ContainerPort:
+    Type: Number
+    Description: Port container will listen on
+{% endif %}
+
+{% if values.use_load_balancer %}
+  AlbRulePriority:
+    Type: Number
+    Description: The priority for the routing rule added to the load balancer.
+
+  AlbRulePath:
+    Type: String
+    Description: A path on the public load balancer that this service
+      should be connected to. Use * to send all load balancer
+      traffic to this service.
+
+  VpcId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Account VPC ID
+{% endif %}
+
+  VpcSubnets:
+    Type: AWS::SSM::Parameter::Value<CommaDelimitedList>
+    Description: Account subnets
+
+
+Resources:
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      Family: !Sub ${Component}-${CodeBranch}
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ClusterTaskIamRoleArn
+      TaskRoleArn: !Ref TaskIamRole
+      ContainerDefinitions:
+        - Name: !Ref Component
+          Image: !Sub '{% if values.is_nodejs_app %}${ContainerRepo}/${ContainerOrg}/{% endif %}${ContainerImage}:${ContainerTag}'
+{% if values.container_port %}
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+{% endif %}
+          #Environment:
+          #  - Name: VARIABLE
+          #    Value: !Ref Parameter
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: true
+              awslogs-group: !Sub '/aws/ecs/${ClusterName}/${AWS::StackName}'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: app
+
+  Service:
+    Type: AWS::ECS::Service
+    {% if values.use_load_balancer %}DependsOn: AlbListenerRule{% endif %}
+    Properties:
+      ServiceName: !Ref Component
+      Cluster: !Ref ClusterName
+      LaunchType: FARGATE
+      EnableECSManagedTags: true
+      PropagateTags: TASK_DEFINITION
+      EnableExecuteCommand: true
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      DesiredCount: !Ref ContainerDesiredCount
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref ClusterSecurityGroupId
+          Subnets: !Ref VpcSubnets
+          AssignPublicIp: ENABLED   # Enabled because this runs in public subnet
+      TaskDefinition: !Ref TaskDefinition
+{% if values.use_load_balancer %}
+      LoadBalancers:
+        - ContainerName: !Ref Component
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref AlbTargetGroup
+      HealthCheckGracePeriodSeconds: 60
+{% endif %}
+
+{% if values.use_load_balancer %}
+  AlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 5
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 4
+      HealthyThresholdCount: 2
+      TargetType: ip
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VpcId
+
+  AlbListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref AlbTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - !Ref AlbRulePath
+      ListenerArn: !Ref ClusterAlbListenerArn
+      Priority: !Ref AlbRulePriority
+{% endif %}
+
+  TaskIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies: []
