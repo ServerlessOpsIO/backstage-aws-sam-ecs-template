@@ -36,8 +36,7 @@ jobs:
         uses: ServerlessOpsIO/gha-store-artifacts@v1
         with:
           use_aws_sam: true
-
-{% if values.is_nodejs_app %}
+{% if values.is_dev_app %}
   build_container:
     runs-on: ubuntu-latest
     permissions:
@@ -53,6 +52,7 @@ jobs:
         with:
           build_aws_account_id: {% raw %}${{ secrets.AWS_CICD_ACCOUNT_ID }}{% endraw %}
 
+{% if values.is_nodejs_app %}
       - name: Setup NodeJS
         uses: ServerlessOpsIO/gha-setup-node@v1
         with:
@@ -63,31 +63,20 @@ jobs:
         id: compile
         shell: bash
         working-directory: src
-        run: yarn run tsc:full
-
-      - name: Build Application Code
-        id: build
-        shell: bash
-        working-directory: src
-        run: yarn run build:all
+        run: yarn run compile
 
       - name: Test Application
         id: test
         shell: bash
         working-directory: src
-        run: yarn run test:all
+        run: yarn run test:unit
 
       - name: Lint Application
         id: lint
         shell: bash
         working-directory: src
-        run: yarn run lint:all
-
-      - name: Build Base Image
-        id: build-image
-        shell: bash
-        working-directory: src
-        run: yarn run build-image
+        run: yarn run lint
+{% endif %}
 
       - name: Build container image
         uses: kciter/aws-ecr-action@v4

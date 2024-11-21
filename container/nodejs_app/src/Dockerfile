@@ -1,0 +1,1 @@
+FROM node:${{ values.nodejs_image_tag }}

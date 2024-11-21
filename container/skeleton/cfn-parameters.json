@@ -7,7 +7,7 @@
   "ClusterTaskIamRoleArn": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsTaskExecutionIamRoleArn",
   "ClusterSecurityGroupId": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/ContainerSecurityGroupId",
   {% if values.use_load_balancer -%}"ClusterAlbListenerArn": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsAlbListenerArn",{% endif -%}
-  {% if values.is_nodejs_app -%}
+  {% if values.is_dev_app -%}
   "ContainerRepo": $secrets.AWS_ECR_REPO,
   "ContainerOrg": $env.GITHUB_REPOSITORY_OWNER_PART_SLUG,
   "ContainerImage": $env.GITHUB_REPOSITORY_NAME_PART_SLUG,

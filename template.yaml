@@ -16,7 +16,7 @@ metadata:
 
 spec:
   owner: developers
-  type: service
+  type: component
 
   parameters:
     - title: ECS Cluster Info
@@ -151,8 +151,8 @@ spec:
         targetPath: cluster
         url: ./cluster/pipeline
         values:
-          domain_name: ${{ steps.fetch.output.entities[1].metadata.name }}
-          system_name: ${{ steps.fetch.output.entities[2].metadata.name }}
+          domain_name: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
 
     - id: publish
       name: Publish to GitHub
@@ -162,6 +162,7 @@ spec:
         owner: tmclaugh
         repoUrl: github.com?repo=${{ parameters.name | lower }}-ecs-cluster&owner=ServerlessOpsIO
         repoVisibility: public
+        protectDefaultBranch: false
         requiredApprovingReviewCount: 0
         description: ${{ parameters.description }}
         gitAuthorName: ${{ user.entity.spec.profile.displayName }}
@@ -171,8 +172,8 @@ spec:
         secrets:
           DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
         topics:
-          - "domain:${{ steps.fetch.output.entities[1].metadata.name }}"
-          - "system:${{ steps.fetch.output.entities[2].metadata.name }}"
+          - "domain:${{ parameters.domain | parseEntityRef | pick('name') }}"
+          - "system:${{ parameters.system | parseEntityRef | pick('name') }}"
 
     - id: register
       name: Register in Backstage
@@ -200,8 +201,8 @@ metadata:
     - ecs
 
 spec:
-  owner: developer-experience
-  type: service
+  owner: developers
+  type: component
 
   parameters:
     - title: ECS Service Info
@@ -394,8 +395,8 @@ spec:
         targetPath: container
         url: ./container/pipeline
         values:
-          domain_name: ${{ steps.fetch.output.entities[1].metadata.name }}
-          system_name: ${{ steps.fetch.output.entities[2].metadata.name }}
+          domain_name: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
 
     - id: publish
       name: Publish to GitHub
@@ -404,6 +405,7 @@ spec:
         sourcePath: container
         repoUrl: github.com?repo=${{ parameters.name | lower }}-ecs-service&owner=ServerlessOpsIO
         repoVisibility: public
+        protectDefaultBranch: false
         requiredApprovingReviewCount: 0
         description: ${{ parameters.description }}
         gitAuthorName: ${{ user.entity.spec.profile.displayName }}
@@ -413,8 +415,277 @@ spec:
         secrets:
           DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
         topics:
-          - "domain:${{ steps.fetch.output.entities[1].metadata.name }}"
-          - "system:${{ steps.fetch.output.entities[2].metadata.name }}"
+          - "domain:${{ parameters.domain | parseEntityRef | pick('name') }}"
+          - "system:${{ parameters.system | parseEntityRef | pick('name') }}"
+
+    - id: register
+      name: Register in Backstage
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: "/catalog-info.yaml"
+
+---
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: aws-sam-ecs-dev-container
+  title: Containerized Development Application
+  description: |
+    Create an AWS ECS service and container for development
+
+    Options:
+    * Container image
+    * Container resources
+    * Load balancing
+
+    Languages
+    * NodeJS / Typescript
+    * Python (TODO)
+
+  tags:
+    - aws
+    - ecs
+    - nodejs
+    - typescript
+
+spec:
+  owner: developers
+  type: component
+
+  parameters:
+    - title: ECS Service Info
+      required:
+        - is_dev_app
+        - namespace
+        - name
+        - description
+        - owner
+        - system
+        - domain
+        - account_id
+        - cluster
+      properties:
+        is_dev_app:
+          title: Namespace
+          type: boolean
+          description: Namespace for the component
+          default: true
+          ui:widget: hidden
+        namespace:
+          title: Namespace
+          type: string
+          description: Namespace for the component
+          default: default
+          ui:widget: hidden
+        name:
+          title: ECS Service Name
+          type: string
+          description: Unique name of the ECS service. Git repo will be named ${name}-ecs-service
+          ui:field: EntityNamePicker
+        description:
+          title: Description
+          type: string
+          description: Short description of the component
+        owner:
+          title: Owner
+          type: string
+          description: |
+            Owning group of entity.
+          ui:field: MyGroupsPicker
+          ui:options:
+            allowArbitraryValues: false
+        domain:
+          title: Domain
+          type: string
+          description: Domain the component belongs to.
+          ui:field: EntityPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              - kind: Domain
+            defaultKind: Domain
+        system:
+          title: System
+          type: string
+          description: System the component belongs to.
+          ui:field: SoContextualEntityPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              - kind: System
+                relations.partOf: "{{ parameters.domain }}"
+            defaultKind: System
+        account_id:
+          title: Account ID
+          type: string
+          description: Cloud account to deploy to
+          ui:field: SoContextualEntityPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              - kind: Resource
+                relations.partOf: "{{ parameters.system }}"
+                spec.type: cloud-account
+            defaultKind: System
+        cluster:
+          title: Cluster
+          type: string
+          description: ECS cluster to deploy to
+          ui:field: SoContextualEntityPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              - kind: Component
+                relations.partOf: "{{ parameters.system }}"
+                spec.type: container-cluster
+            defaultKind: System
+    - title: ECS Service Configuration
+      required:
+        - container_cpu
+        - container_memory
+        - container_count
+        - use_load_balancer
+      properties:
+        application_language:
+          title: Application Language
+          type: string
+          description: Language used to develop the application
+          default: nodejs
+          enum:
+            - nodejs
+            - python
+        container_cpu:
+          title: Container CPU shares
+          type: number
+          description: Container CPU shares; 1 CPU = 1024
+          default: 1024
+        container_memory:
+          title: Container Memory
+          type: number
+          description: Amount of container memory in MB
+          default: 2048
+        container_count:
+          title: Container Count
+          type: number
+          description: Number of container instances; most production services should have one per AZ (typically 3)
+          default: 3
+        use_load_balancer:
+          title: Use cluster load balancer?
+          type: boolean
+          description: Whether to create a load balancer rule to direct traffic to the container
+          default: true
+          'ui:widget': 'radio'
+      dependencies:
+        use_load_balancer:
+          allOf:
+            - if:
+                properties:
+                  use_load_balancer:
+                    const: true
+              then:
+                required:
+                  - container_port
+                  - load_balancer_priority
+                properties:
+                  container_port:
+                    title: Container port
+                    type: number
+                    description: Container network port; required if using load balancer
+                  load_balancer_priority:
+                    title: Load balancer rule priority
+                    type: number
+                    description: Lower values are evaluated first.
+                    default: 1
+
+  steps:
+    - id: fetch
+      name: Fetch Entity References
+      action: catalog:fetch
+      input:
+        entityRefs:
+          - ${{ parameters.owner }}
+          - ${{ parameters.domain }}
+          - ${{ parameters.system }}
+          - ${{ parameters.account_id }}
+          - ${{ parameters.cluster }}
+
+    - id: cluster
+      name: Create Cluster
+      action: fetch:template
+      input:
+        targetPath: container
+        url: ./container/skeleton
+        values:
+          is_dev_app: ${{ parameters.is_dev_app }}
+          is_nodejs_app: ${{ parameters.application_language === 'nodejs' }}
+          component_namespace: ${{ parameters.namespace }}
+          domain_title: ${{ steps.fetch.output.entities[1].metadata.title }}
+          domain_name: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          system_entity: ${{ parameters.system }}
+          system_title: ${{ steps.fetch.output.entities[2].metadata.title }}
+          system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
+          component_prefix: ${{ parameters.name | lower }}
+          component_name: ${{ parameters.name | lower }}-ecs-service
+          component_description: ${{ parameters.description }}
+          account_entity: ${{ parameters.account_id }}
+          owner: ${{ parameters.owner }}
+          cluster_ref: ${{ parameters.cluster }}
+          cluster_domain_name: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          cluster_system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
+          cluster_component_name: ${{ parameters.cluster | parseEntityRef | pick('name')}}
+          container_image: ${{ parameters.container_image }}
+          container_tag: ${{ parameters.container_tag }}
+          container_cpu: ${{ parameters.container_cpu }}
+          container_memory: ${{ parameters.container_memory }}
+          container_count: ${{ parameters.container_count }}
+          container_port: ${{ parameters.container_port }}
+          use_load_balancer: ${{ parameters.use_load_balancer }}
+          load_balancer_priority: ${{ parameters.load_balancer_priority }}
+
+    - id: cluster-pipeline
+      name: Create container pipeline
+      action: fetch:template
+      input:
+        targetPath: container
+        url: ./container/pipeline
+        values:
+          domain_name: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
+          is_dev_app: ${{ parameters.is_dev_app }}
+          is_nodejs_app: ${{ parameters.application_language === 'nodejs' }}
+
+    - id: nodejs-app
+      name: Create NodeJS starter
+      if: ${{ parameters.application_language === 'nodejs' }}
+      action: fetch:template
+      input:
+        targetPath: container
+        url: ./container/nodejs_app
+        values:
+          component_name: ${{ parameters.name | lower }}-ecs-service
+          nodejs_image_tag: 20-alpine
+          component_description: ${{ parameters.description }}
+
+    - id: publish
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        sourcePath: container
+        repoUrl: github.com?repo=${{ parameters.name | lower }}-ecs-service&owner=ServerlessOpsIO
+        repoVisibility: public
+        requiredApprovingReviewCount: 0
+        protectDefaultBranch: false
+        description: ${{ parameters.description }}
+        gitAuthorName: ${{ user.entity.spec.profile.displayName }}
+        gitAuthorEmail:  ${{ user.entity.spec.profile.email }}
+        gitCommitMessage: "Initial commit via Backstage"
+        defaultBranch: main
+        secrets:
+          DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
+        topics:
+          - "domain:${{ parameters.domain | parseEntityRef | pick('name') }}"
+          - "system:${{ parameters.system | parseEntityRef | pick('name') }}"
 
     - id: register
       name: Register in Backstage

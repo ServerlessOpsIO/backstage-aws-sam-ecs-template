@@ -70,9 +70,9 @@ venv.bak/
 # Mac Cruft
 .DS_Store
 
-# Deploy
-codepipeline-config-*.yaml
-
+# NodeJS
+node_modules
+.yarn
 
 # AWS SAM
 .aws-sam/

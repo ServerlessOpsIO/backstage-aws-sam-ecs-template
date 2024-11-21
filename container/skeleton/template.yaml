@@ -40,7 +40,7 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
     Description: ID of cluster security group
 
-{% if values.is_nodejs_app %}
+{% if values.is_dev_app %}
   ContainerRepo:
     Type: String
     Description: ECR repository name
@@ -114,7 +114,7 @@ Resources:
       TaskRoleArn: !Ref TaskIamRole
       ContainerDefinitions:
         - Name: !Ref Component
-          Image: !Sub '{% if values.is_nodejs_app %}${ContainerRepo}/${ContainerOrg}/{% endif %}${ContainerImage}:${ContainerTag}'
+          Image: !Sub '{% if values.is_dev_app %}${ContainerRepo}/${ContainerOrg}/{% endif %}${ContainerImage}:${ContainerTag}'
 {% if values.container_port %}
           PortMappings:
             - ContainerPort: !Ref ContainerPort
