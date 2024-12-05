@@ -13,6 +13,8 @@ metadata:
   tags:
     - aws
     - ecs
+    - container-runtime
+    - containerization
 
 spec:
   owner: developers
@@ -199,6 +201,8 @@ metadata:
   tags:
     - aws
     - ecs
+    - container
+    - containerization
 
 spec:
   owner: developers
@@ -446,6 +450,8 @@ metadata:
   tags:
     - aws
     - ecs
+    - container
+    - containerization
     - nodejs
     - typescript
 
