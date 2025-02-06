@@ -64,4 +64,5 @@ jobs:
         with:
           aws_account_id: {% raw %}${{ secrets.DEPLOYMENT_ACCOUNT_ID }}{% endraw %}
           env_json: {% raw %}${{ toJson(env) }}{% endraw %}
+          vars_json: {% raw %}${{ toJson(vars) }}{% endraw %}
           secrets_json: {% raw %}${{ toJson(secrets) }}{% endraw %}
