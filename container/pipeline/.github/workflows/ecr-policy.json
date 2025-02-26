@@ -7,7 +7,9 @@
       "Principal": "*",
       "Action": [
         "ecr:BatchGetImage",
-        "ecr:GetDownloadUrlForLayer"
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:ListImages",
+        "ecr:ListTagsForResource"
       ],
       "Condition": {
         "StringEquals": {
