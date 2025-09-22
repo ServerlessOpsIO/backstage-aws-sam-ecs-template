@@ -152,16 +152,12 @@ spec:
       input:
         targetPath: cluster
         url: ./cluster/pipeline
-        values:
-          domain_name: ${{ parameters.domain | parseEntityRef | pick('name') }}
-          system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
 
     - id: publish
       name: Publish to GitHub
       action: publish:github
       input:
         sourcePath: cluster
-        owner: tmclaugh
         repoUrl: github.com?repo=${{ parameters.name | lower }}-ecs-cluster&owner=ServerlessOpsIO
         repoVisibility: public
         protectDefaultBranch: false
