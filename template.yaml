@@ -394,9 +394,6 @@ spec:
       input:
         targetPath: container
         url: ./container/pipeline
-        values:
-          domain_name: ${{ parameters.domain | parseEntityRef | pick('name') }}
-          system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
 
     - id: publish
       name: Publish to GitHub
@@ -652,8 +649,6 @@ spec:
         targetPath: container
         url: ./container/pipeline
         values:
-          domain_name: ${{ parameters.domain | parseEntityRef | pick('name') }}
-          system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
           is_dev_app: ${{ parameters.is_dev_app }}
           is_nodejs_app: ${{ parameters.application_language === 'nodejs' }}
 
