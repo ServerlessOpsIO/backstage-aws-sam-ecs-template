@@ -169,9 +169,6 @@ spec:
         defaultBranch: main
         secrets:
           DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
-        topics:
-          - "domain:${{ parameters.domain | parseEntityRef | pick('name') }}"
-          - "system:${{ parameters.system | parseEntityRef | pick('name') }}"
 
     - id: register
       name: Register in Backstage
@@ -411,9 +408,6 @@ spec:
         defaultBranch: main
         secrets:
           DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
-        topics:
-          - "domain:${{ parameters.domain | parseEntityRef | pick('name') }}"
-          - "system:${{ parameters.system | parseEntityRef | pick('name') }}"
 
     - id: register
       name: Register in Backstage
@@ -680,9 +674,6 @@ spec:
         defaultBranch: main
         secrets:
           DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
-        topics:
-          - "domain:${{ parameters.domain | parseEntityRef | pick('name') }}"
-          - "system:${{ parameters.system | parseEntityRef | pick('name') }}"
 
     - id: register
       name: Register in Backstage
