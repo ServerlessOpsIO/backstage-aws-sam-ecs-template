@@ -158,35 +158,6 @@ Resources:
       HealthCheckGracePeriodSeconds: 60
 {% endif %}
 
-{% if values.use_load_balancer %}
-  AlbTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 5
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 4
-      HealthyThresholdCount: 2
-      TargetType: ip
-      Port: !Ref ContainerPort
-      Protocol: HTTP
-      UnhealthyThresholdCount: 2
-      VpcId: !Ref VpcId
-
-  AlbListenerRule:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref AlbTargetGroup
-          Type: forward
-      Conditions:
-        - Field: path-pattern
-          Values:
-            - !Ref AlbRulePath
-      ListenerArn: !Ref ClusterAlbListenerArn
-      Priority: !Ref AlbRulePriority
-{% endif %}
-
   # IAM Roles
   # Governs permissions during task initialization
   TaskExecutionIamRole:
@@ -232,3 +203,34 @@ Resources:
               - sts:AssumeRole
       Path: /
       Policies: []
+
+
+{% if values.use_load_balancer %}
+  # ALB
+  AlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 5
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 4
+      HealthyThresholdCount: 2
+      TargetType: ip
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VpcId
+
+  AlbListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref AlbTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - !Ref AlbRulePath
+      ListenerArn: !Ref ClusterAlbListenerArn
+      Priority: !Ref AlbRulePriority
+{% endif %}
