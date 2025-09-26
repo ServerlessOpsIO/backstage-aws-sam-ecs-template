@@ -26,10 +26,6 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
     Description: Name of ECS cluster
 
-  ClusterTaskIamRoleArn:
-    Type: AWS::SSM::Parameter::Value<String>
-    Description: IAM role ARN for task ECS opperations.
-
 {% if values.use_load_balancer %}
   ClusterAlbListenerArn:
     Type: AWS::SSM::Parameter::Value<String>
@@ -110,7 +106,7 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !Ref ClusterTaskIamRoleArn
+      ExecutionRoleArn: !Ref TaskExecutionIamRole
       TaskRoleArn: !Ref TaskIamRole
       ContainerDefinitions:
         - Name: !Ref Component
@@ -191,6 +187,39 @@ Resources:
       Priority: !Ref AlbRulePriority
 {% endif %}
 
+  # IAM Roles
+  # Governs permissions during task initialization
+  TaskExecutionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  # Allow the ECS Tasks to download images from ECR
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+
+                  # Allow the ECS tasks to upload logs to CloudWatch
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+
+
+  # Governs permissions of running task container.
   TaskIamRole:
     Type: AWS::IAM::Role
     Properties:

@@ -4,7 +4,6 @@
   "Component": $env.GITHUB_REPOSITORY_NAME_PART_SLUG_CS,
   "CodeBranch": $env.GITHUB_REF_SLUG_CS,
   "ClusterName": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsClusterName",
-  "ClusterTaskIamRoleArn": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsTaskExecutionIamRoleArn",
   "ClusterSecurityGroupId": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/ContainerSecurityGroupId",
   {% if values.use_load_balancer -%}"ClusterAlbListenerArn": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsAlbListenerArn",{% endif -%}
   {% if values.is_dev_app -%}
