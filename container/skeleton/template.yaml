@@ -118,6 +118,11 @@ Resources:
           #Environment:
           #  - Name: VARIABLE
           #    Value: !Ref Parameter
+          DockerLabels:
+            com.datadoghq.tags.domain: !Ref Domain
+            com.datadoghq.tags.system: !Ref System
+            com.datadoghq.tags.component: !Ref Component
+            com.datadoghq.tags.code_branch: !Ref CodeBranch
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -172,18 +177,21 @@ Resources:
               - sts:AssumeRole
       Path: /
       Policies:
-        - PolicyName: AmazonECSTaskExecutionRolePolicy
+        - PolicyName: ECRImage
           PolicyDocument:
             Statement:
               - Effect: Allow
                 Action:
-                  # Allow the ECS Tasks to download images from ECR
                   - 'ecr:GetAuthorizationToken'
                   - 'ecr:BatchCheckLayerAvailability'
                   - 'ecr:GetDownloadUrlForLayer'
                   - 'ecr:BatchGetImage'
-
-                  # Allow the ECS tasks to upload logs to CloudWatch
+                Resource: '*'
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
                   - 'logs:CreateLogGroup'
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
