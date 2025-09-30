@@ -281,14 +281,13 @@ spec:
                 relations.partOf: "{{ parameters.system }}"
                 spec.type: container-cluster
             defaultKind: System
-    - title: ECS Service Configuration
+    - title: Container Configuration
       required:
         - container_image
         - container_tag
         - container_cpu
         - container_memory
         - container_count
-        - use_load_balancer
       properties:
         container_image:
           title: Container Image
@@ -314,10 +313,21 @@ spec:
           type: number
           description: Number of container instances; most production services should have one per AZ (typically 3)
           default: 3
+    - title: Infrastructure Configuration
+      required:
+        - use_load_balancer
+        - enable_datadog
+      properties:
         use_load_balancer:
           title: Use cluster load balancer?
           type: boolean
-          description: Whether to create a load balancer rule to direct traffic to the container
+          description: Whether to create a load balancer rule to direct traffic to the task containers
+          default: true
+          'ui:widget': 'radio'
+        enable_datadog:
+          title: Enable Datadog integration?
+          type: boolean
+          description: Whether to enable Datadog monitoring for the ECS task containers
           default: true
           'ui:widget': 'radio'
       dependencies:
@@ -384,6 +394,7 @@ spec:
           container_port: ${{ parameters.container_port }}
           use_load_balancer: ${{ parameters.use_load_balancer }}
           load_balancer_priority: ${{ parameters.load_balancer_priority }}
+          enable_datadog: ${{ parameters.enable_datadog }}
 
     - id: cluster-pipeline
       name: Create container pipeline
@@ -538,7 +549,6 @@ spec:
         - container_cpu
         - container_memory
         - container_count
-        - use_load_balancer
       properties:
         application_language:
           title: Application Language
@@ -563,10 +573,21 @@ spec:
           type: number
           description: Number of container instances; most production services should have one per AZ (typically 3)
           default: 3
+    - title: Infrastructure Configuration
+      required:
+        - use_load_balancer
+        - enable_datadog
+      properties:
         use_load_balancer:
           title: Use cluster load balancer?
           type: boolean
-          description: Whether to create a load balancer rule to direct traffic to the container
+          description: Whether to create a load balancer rule to direct traffic to the task containers
+          default: true
+          'ui:widget': 'radio'
+        enable_datadog:
+          title: Enable Datadog integration?
+          type: boolean
+          description: Whether to enable Datadog monitoring for the ECS task containers
           default: true
           'ui:widget': 'radio'
       dependencies:
@@ -635,6 +656,7 @@ spec:
           container_port: ${{ parameters.container_port }}
           use_load_balancer: ${{ parameters.use_load_balancer }}
           load_balancer_priority: ${{ parameters.load_balancer_priority }}
+          enable_datadog: ${{ parameters.enable_datadog }}
 
     - id: cluster-pipeline
       name: Create container pipeline
