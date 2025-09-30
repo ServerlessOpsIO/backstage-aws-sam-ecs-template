@@ -18,6 +18,7 @@
   "ContainerCpu": "${{ values.container_cpu }}",
   "ContainerMemory": "${{ values.container_memory }}",
   "ContainerDesiredCount": "${{ values.container_count }}",
+  "EnableContainerExec": "false",
   {% if values.enable_datadog %}"DatadogApiKey": $secrets.DATADOG_API_KEY,{% endif -%}
   {% if values.container_port -%}"ContainerPort": "${{ values.container_port }}",{% endif -%}
   {% if values.use_load_balancer -%}

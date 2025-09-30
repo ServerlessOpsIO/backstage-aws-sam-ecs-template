@@ -66,6 +66,14 @@ Parameters:
     Type: Number
     Description: How many copies of the service task to run
 
+  EnableContainerExec:
+    Type: String
+    Description: Enable ECS Exec for the container
+    AllowedValues:
+      - "true"
+      - "false"
+    Default: "false"
+
 {% if values.container_port %}
   ContainerPort:
     Type: Number
@@ -97,6 +105,9 @@ Parameters:
     Type: String
     Description: Datadog API Key
 {% endif %}
+
+Conditions:
+  IsEnableContainerExec: !Equals [!Ref EnableContainerExec, "true"]
 
 Resources:
   TaskDefinition:
@@ -186,7 +197,7 @@ Resources:
       LaunchType: FARGATE
       EnableECSManagedTags: true
       PropagateTags: TASK_DEFINITION
-      EnableExecuteCommand: true
+      EnableExecuteCommand: !Ref EnableContainerExec
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 75
@@ -257,6 +268,23 @@ Resources:
               - sts:AssumeRole
       Path: /
       Policies: []
+
+  ContainerExecIamPolicy:
+    Type: AWS::IAM::Policy
+    Condition: IsEnableContainerExec
+    Properties:
+      PolicyName: AllowECSExec
+      Roles:
+        - !Ref TaskIamRole
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ssmmessages:CreateControlChannel'
+              - 'ssmmessages:CreateDataChannel'
+              - 'ssmmessages:OpenControlChannel'
+              - 'ssmmessages:OpenDataChannel'
+            Resource: '*'
 
 
 {% if values.use_load_balancer %}
