@@ -111,7 +111,7 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !Ref TaskExecutionIamRole
+      ExecutionRoleArn: !Ref ExecutionIamRole
       TaskRoleArn: !Ref TaskIamRole
       ContainerDefinitions:
         - Name: !Ref Component
@@ -211,7 +211,7 @@ Resources:
 
   # IAM Roles
   # Governs permissions during task initialization
-  TaskExecutionIamRole:
+  ExecutionIamRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
