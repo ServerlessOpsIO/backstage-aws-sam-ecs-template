@@ -115,9 +115,22 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref ContainerPort
 {% endif %}
+          # NOTE: Environment variables; often used for configuration
           #Environment:
-          #  - Name: VARIABLE
+          #  - Name: ENV_VARIABLE
           #    Value: !Ref Parameter
+          # NOTE: Secrets from SSM Parameter Store or AWS Secrets Manager; like Environment but not
+          # exposed in console
+          #Secrets:
+          #  - Name: ENV_VARIABLE
+          #    ValueFrom: <ARN of SS secret or SSM parameter>
+          # NOTE: Define if not defined by container
+          #HealthCheck:
+          #  Command: ["CMD-SHELL", "<SOME_COMMAND> || exit 1"]
+          #  Interval: 30
+          #  Timeout: 5
+          #  Retries: 3
+          #  StartPeriod: 60
           DockerLabels:
             com.datadoghq.tags.domain: !Ref Domain
             com.datadoghq.tags.system: !Ref System
