@@ -5,7 +5,7 @@
   "CodeBranch": $env.GITHUB_REF_SLUG_CS,
   "ClusterName": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsClusterName",
   "ClusterSecurityGroupId": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/ContainerSecurityGroupId",
-  {% if values.use_load_balancer -%}"ClusterAlbListenerArn": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsAlbListenerArn",{% endif -%}
+  {% if values.use_load_balancer %}"ClusterAlbListenerArn": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsAlbListenerArn",{% endif %}
   {% if values.is_dev_app -%}
   "ContainerRepo": $secrets.AWS_ECR_REPO,
   "ContainerOrg": $env.GITHUB_REPOSITORY_OWNER_PART_SLUG,
@@ -19,9 +19,9 @@
   "ContainerMemory": "${{ values.container_memory }}",
   "ContainerDesiredCount": "${{ values.container_count }}",
   "EnableContainerExec": "false",
-  {% if values.enable_datadog %}"DatadogApiKey": $secrets.DATADOG_API_KEY,{% endif -%}
-  {% if values.container_port -%}"ContainerPort": "${{ values.container_port }}",{% endif -%}
-  {% if values.use_load_balancer -%}
+  {% if values.enable_datadog %}"DatadogApiKey": $secrets.DATADOG_API_KEY,{% endif %}
+  {% if values.container_port %}"ContainerPort": "${{ values.container_port }}",{% endif %}
+  {% if values.use_load_balancer %}
   "AlbRulePriority": "${{ values.load_balancer_priority }}",
   "AlbRulePath": "*",
   "VpcId": "/org/networking/VpcId",
