@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Setup job workspace
-        uses: ServerlessOpsIO/gha-setup-workspace@v1
+        uses: ServerlessOpsIO/gha-setup-workspace@v2
 
       - name: Assume AWS Credentials
         uses: ServerlessOpsIO/gha-assume-aws-credentials@v1
@@ -23,7 +23,7 @@ jobs:
           build_aws_account_id: {% raw %}${{ secrets.AWS_CICD_ACCOUNT_ID }}{% endraw %}
 
       - name: Install AWS SAM
-        uses: aws-actions/setup-sam@v2
+        uses: aws-actions/setup-sam@v3
 
 
       - name: Validate template
@@ -33,7 +33,7 @@ jobs:
         run: sam build --parallel --template template.yaml
 
       - name: Store Artifacts
-        uses: ServerlessOpsIO/gha-store-artifacts@v1
+        uses: ServerlessOpsIO/gha-store-artifacts@v2
         with:
           use_aws_sam: true
 
@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Setup job workspace
-        uses: ServerlessOpsIO/gha-setup-workspace@v1
+        uses: ServerlessOpsIO/gha-setup-workspace@v2
 
       - name: Assume AWS Credentials
         uses: ServerlessOpsIO/gha-assume-aws-credentials@v1
@@ -109,7 +109,7 @@ jobs:
 
     steps:
       - name: Setup job workspace
-        uses: ServerlessOpsIO/gha-setup-workspace@v1
+        uses: ServerlessOpsIO/gha-setup-workspace@v2
         with:
           checkout_artifact: true
 
