@@ -273,7 +273,7 @@ spec:
             allowArbitraryValues: false
             catalogFilter:
               - kind: Resource
-                relations.dependencyOf: "{{ parameters.environment }}"
+                relations.partOf: "{{ parameters.system }}"
                 spec.type: environment
         account_id:
           title: Account ID
@@ -334,16 +334,16 @@ spec:
         - use_load_balancer
         - enable_datadog
       properties:
-        use_load_balancer:
-          title: Use cluster load balancer?
-          type: boolean
-          description: Whether to create a load balancer rule to direct traffic to the task containers
-          default: true
-          'ui:widget': 'radio'
         enable_datadog:
           title: Enable Datadog integration?
           type: boolean
           description: Whether to enable Datadog monitoring for the ECS task containers
+          default: true
+          'ui:widget': 'radio'
+        use_load_balancer:
+          title: Use cluster load balancer?
+          type: boolean
+          description: Whether to create a load balancer rule to direct traffic to the task containers
           default: true
           'ui:widget': 'radio'
       dependencies:
@@ -602,16 +602,16 @@ spec:
         - use_load_balancer
         - enable_datadog
       properties:
-        use_load_balancer:
-          title: Use cluster load balancer?
-          type: boolean
-          description: Whether to create a load balancer rule to direct traffic to the task containers
-          default: true
-          'ui:widget': 'radio'
         enable_datadog:
           title: Enable Datadog integration?
           type: boolean
           description: Whether to enable Datadog monitoring for the ECS task containers
+          default: true
+          'ui:widget': 'radio'
+        use_load_balancer:
+          title: Use cluster load balancer?
+          type: boolean
+          description: Whether to create a load balancer rule to direct traffic to the task containers
           default: true
           'ui:widget': 'radio'
       dependencies:
