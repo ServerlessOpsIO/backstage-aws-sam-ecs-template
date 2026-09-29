@@ -126,8 +126,8 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !Ref ExecutionIamRole
-      TaskRoleArn: !Ref TaskIamRole
+      ExecutionRoleArn: !GetAtt ExecutionIamRole.Arn
+      TaskRoleArn: !GetAtt TaskIamRole.Arn
       ContainerDefinitions:
         - Name: !Ref Component
           Image: !Sub '{% if values.is_dev_app %}${ContainerRepo}/${ContainerOrg}/{% endif %}${ContainerImage}:${ContainerTag}'
