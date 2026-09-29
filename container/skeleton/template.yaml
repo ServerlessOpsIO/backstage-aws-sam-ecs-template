@@ -30,11 +30,11 @@ Parameters:
   ClusterAlbListenerArn:
     Type: AWS::SSM::Parameter::Value<String>
     Description: Name of ECS cluster
-{% endif %}
 
-  ClusterSecurityGroupId:
-    Type: AWS::SSM::Parameter::Value<String>
-    Description: ID of cluster security group
+  ClusterAlbSecurityGroupId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::SecurityGroup::Id>
+    Description: ID of cluster ALB security group
+{% endif %}
 
 {% if values.is_dev_app %}
   ContainerRepo:
@@ -214,7 +214,7 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           SecurityGroups:
-            - !Ref ClusterSecurityGroupId
+            - !Ref ServiceSecurityGroup
           Subnets: !Ref VpcSubnets
           AssignPublicIp: ENABLED   # Enabled because this runs in public subnet
       TaskDefinition: !Ref TaskDefinition
@@ -292,8 +292,27 @@ Resources:
               - 'ssmmessages:OpenDataChannel'
             Resource: '*'
 
+  # Security Group
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS Service SG
+      VpcId: !Ref VpcId
 
 {% if values.use_load_balancer %}
+
+  ## ALB SG
+  ServiceSecurityGroupAlbIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from ALBs
+      GroupId: !Ref ServiceSecurityGroup
+      # All TCP ports
+      IpProtocol: tcp
+      FromPort: !Ref ContainerPort
+      ToPort: !Ref ContainerPort
+      SourceSecurityGroupId: !Ref ClusterAlbSecurityGroupId
+
   # ALB
   AlbTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
