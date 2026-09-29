@@ -235,7 +235,7 @@ spec:
         name:
           title: ECS Service Name
           type: string
-          description: Unique name of the ECS service. Git repo will be named ${name}-ecs-service
+          description: Unique name of the ECS service. Git repo will be named ${name}-app
           ui:field: EntityNamePicker
         description:
           title: Description
@@ -404,7 +404,7 @@ spec:
           system_title: ${{ steps.fetch.output.entities[2].metadata.title }}
           system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
           component_prefix: ${{ parameters.name | lower }}
-          component_name: ${{ parameters.name | lower }}-ecs-service
+          component_name: ${{ parameters.name | lower }}-app
           component_description: ${{ parameters.description }}
           account_entity: ${{ parameters.account_id }}
           owner: ${{ parameters.owner }}
@@ -435,7 +435,7 @@ spec:
       action: publish:github
       input:
         sourcePath: container
-        repoUrl: github.com?repo=${{ parameters.name | lower }}-ecs-service&owner=ServerlessOpsIO
+        repoUrl: github.com?repo=${{ parameters.name | lower }}-app&owner=ServerlessOpsIO
         repoVisibility: public
         protectDefaultBranch: false
         requiredApprovingReviewCount: 0
@@ -517,7 +517,7 @@ spec:
         name:
           title: ECS Service Name
           type: string
-          description: Unique name of the ECS service. Git repo will be named ${name}-ecs-service
+          description: Unique name of the ECS service. Git repo will be named ${name}-app
           ui:field: EntityNamePicker
         description:
           title: Description
@@ -685,7 +685,7 @@ spec:
           system_title: ${{ steps.fetch.output.entities[2].metadata.title }}
           system_name: ${{ parameters.system | parseEntityRef | pick('name') }}
           component_prefix: ${{ parameters.name | lower }}
-          component_name: ${{ parameters.name | lower }}-ecs-service
+          component_name: ${{ parameters.name | lower }}-app
           component_description: ${{ parameters.description }}
           account_entity: ${{ parameters.account_id }}
           owner: ${{ parameters.owner }}
@@ -722,7 +722,7 @@ spec:
         targetPath: container
         url: ./container/nodejs_app
         values:
-          component_name: ${{ parameters.name | lower }}-ecs-service
+          component_name: ${{ parameters.name | lower }}-app
           nodejs_image_tag: 20-alpine
           component_description: ${{ parameters.description }}
 
@@ -731,7 +731,7 @@ spec:
       action: publish:github
       input:
         sourcePath: container
-        repoUrl: github.com?repo=${{ parameters.name | lower }}-ecs-service&owner=ServerlessOpsIO
+        repoUrl: github.com?repo=${{ parameters.name | lower }}-app&owner=ServerlessOpsIO
         repoVisibility: public
         requiredApprovingReviewCount: 0
         protectDefaultBranch: false
