@@ -104,6 +104,10 @@ Parameters:
   DatadogApiKey:
     Type: String
     Description: Datadog API Key
+
+  DatadogSite:
+    Type: String
+    Description: Datadog site (e.g., datadoghq.com)
 {% endif %}
 
 Conditions:
@@ -167,6 +171,8 @@ Resources:
           Environment:
             - Name: DD_API_KEY
               Value: !Ref DatadogApiKey
+            - Name: DD_SITE
+              Value: !Ref DatadogSite
             - Name: ECS_FARGATE
               Value: true
             - Name: DD_LOG_LEVEL
