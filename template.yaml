@@ -273,7 +273,7 @@ spec:
             allowArbitraryValues: false
             catalogFilter:
               - kind: Resource
-                relations.dependencyOf: "{{ parameters.environment }}"
+                relations.partOf: "{{ parameters.system }}"
                 spec.type: environment
         account_id:
           title: Account ID
