@@ -177,6 +177,10 @@ spec:
         defaultBranch: main
         secrets:
           DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
+        customProperties:
+          system: ${{ parameters.system | parseEntityRef | pick('name') }}
+          domain: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          owner: ${{ parameters.owner | parseEntityRef | pick('name') }}
 
     - id: register
       name: Register in Backstage
@@ -435,6 +439,10 @@ spec:
         defaultBranch: main
         secrets:
           DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
+        customProperties:
+          system: ${{ parameters.system | parseEntityRef | pick('name') }}
+          domain: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          owner: ${{ parameters.owner | parseEntityRef | pick('name') }}
 
     - id: register
       name: Register in Backstage
@@ -720,6 +728,10 @@ spec:
         defaultBranch: main
         secrets:
           DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
+        customProperties:
+          system: ${{ parameters.system | parseEntityRef | pick('name') }}
+          domain: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          owner: ${{ parameters.owner | parseEntityRef | pick('name') }}
 
     - id: register
       name: Register in Backstage
