@@ -26,6 +26,10 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
     Description: Account VPC ID
 
+  ServiceConnectNamespace:
+    Type: String
+    Description: "Name of ECS Cluster Service Connect namespace"
+
 {% if values.create_load_balancer %}
   VpcSubnets:
     Type: AWS::SSM::Parameter::Value<CommaDelimitedList>
@@ -107,6 +111,9 @@ Resources:
   ## Cluster
   EcsCluster:
     Type: AWS::ECS::Cluster
+    Properties:
+      ServiceConnectDefaults:
+        Namespace: !Ref ServiceConnectNamespace
 
   # SSM Values
   EcsClusterNameSsmParam:
@@ -134,3 +141,11 @@ Resources:
       Name: !Sub /${Domain}/${System}/${Component}/${CodeBranch}/EcsAlbListenerArn
       Value: !Ref EcsAlbListener
 {% endif %}
+
+  ServiceConnectNamespaceSsmParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Description: Name of ECS Cluster Service Connect namespace
+      Name: !Sub /${Domain}/${System}/${Component}/${CodeBranch}/ServiceConnectNamespace
+      Value: !Ref ServiceConnectNamespace
