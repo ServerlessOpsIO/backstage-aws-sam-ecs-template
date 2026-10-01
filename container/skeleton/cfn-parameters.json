@@ -5,6 +5,7 @@
   "CodeBranch": $env.GITHUB_REF_SLUG_CS,
   "ClusterName": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsClusterName",
   "ClusterSecurityGroupId": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/ContainerSecurityGroupId",
+  "ClusterServiceConnectNamespace": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/ServiceConnectNamespace",
   {% if values.use_load_balancer %}
   "ClusterAlbListenerArn": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/EcsAlbListenerArn",
   "ClusterAlbSecurityGroupId": "/${{ values.cluster_domain_name }}/${{ values.cluster_system_name }}/${{ values.cluster_component_name }}/main/ClusterAlbSecurityGroupId",

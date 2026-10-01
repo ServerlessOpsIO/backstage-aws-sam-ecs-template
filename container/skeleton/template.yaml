@@ -26,6 +26,10 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
     Description: Name of ECS cluster
 
+  ClusterServiceConnectNamespace:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Service Connect namespace for the ECS cluster
+
 {% if values.use_load_balancer %}
   ClusterAlbListenerArn:
     Type: AWS::SSM::Parameter::Value<String>
@@ -134,6 +138,7 @@ Resources:
 {% if values.container_port %}
           PortMappings:
             - ContainerPort: !Ref ContainerPort
+              Name: !Ref Component
 {% endif %}
           # NOTE: Environment variables; often used for configuration
           #Environment:
@@ -189,9 +194,9 @@ Resources:
             LogDriver: awslogs
             Options:
               awslogs-create-group: true
-              awslogs-group: !Sub '/aws/ecs/${ClusterName}/${AWS::StackName}/monitoring'
+              awslogs-group: !Sub '/aws/ecs/${ClusterName}/${AWS::StackName}'
               awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: datadog
+              awslogs-stream-prefix: sidecar
 {% endif %}
 
   Service:
@@ -216,8 +221,23 @@ Resources:
           SecurityGroups:
             - !Ref ServiceSecurityGroup
           Subnets: !Ref VpcSubnets
-          AssignPublicIp: ENABLED   # Enabled because this runs in public subnet
+          AssignPublicIp: ENABLED   # FIXME: Should be dynamioc based on subnet type
       TaskDefinition: !Ref TaskDefinition
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: !Ref ClusterServiceConnectNamespace
+        Services:
+          - PortName: !Ref Component
+            ClientAliases:
+              - Port: !Ref ContainerPort
+                DnsName: !Sub '${Component}.${ClusterServiceConnectNamespace}'
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-create-group: true
+            awslogs-group: !Sub '/aws/ecs/${ClusterName}/${AWS::StackName}'
+            awslogs-stream-prefix: sidecar
+            awslogs-region: !Ref AWS::Region
 {% if values.use_load_balancer %}
       LoadBalancers:
         - ContainerName: !Ref Component
