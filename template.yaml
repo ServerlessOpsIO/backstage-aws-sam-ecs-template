@@ -116,7 +116,7 @@ spec:
                 hostname:
                   title: Hostname
                   type: string
-                  description: Hostname for the load balancer
+                  description: Site FQDN;  ex. app.sandbox.serverlessops.io
             - properties:
                 create_load_balancer:
                   const: false
