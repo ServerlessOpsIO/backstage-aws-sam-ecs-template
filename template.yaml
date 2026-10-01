@@ -116,7 +116,7 @@ spec:
                 hostname:
                   title: Hostname
                   type: string
-                  description: Hostname for the load balancer
+                  description: Site FQDN;  ex. app.sandbox.serverlessops.io
             - properties:
                 create_load_balancer:
                   const: false
@@ -360,12 +360,18 @@ spec:
               then:
                 required:
                   - container_port
+                  - load_balancer_path
                   - load_balancer_priority
                 properties:
                   container_port:
                     title: Container port
                     type: number
                     description: Container network port; required if using load balancer
+                  load_balancer_path:
+                    title: Load balancer path
+                    type: string
+                    description: Path for the load balancer rule; eg. '/app/*' (all paths prefixed with /app), '*' (all paths)
+                    default: '*'
                   load_balancer_priority:
                     title: Load balancer rule priority
                     type: number
@@ -413,6 +419,7 @@ spec:
           container_count: ${{ parameters.container_count }}
           container_port: ${{ parameters.container_port }}
           use_load_balancer: ${{ parameters.use_load_balancer }}
+          load_balancer_path: ${{ parameters.load_balancer_path }}
           load_balancer_priority: ${{ parameters.load_balancer_priority }}
           enable_datadog: ${{ parameters.enable_datadog }}
 
@@ -632,12 +639,18 @@ spec:
               then:
                 required:
                   - container_port
+                  - load_balancer_path
                   - load_balancer_priority
                 properties:
                   container_port:
                     title: Container port
                     type: number
                     description: Container network port; required if using load balancer
+                  load_balancer_path:
+                    title: Load balancer path
+                    type: string
+                    description: Path for the load balancer rule; eg. '/app/*' (all paths prefixed with /app), '*' (all paths)
+                    default: '*'
                   load_balancer_priority:
                     title: Load balancer rule priority
                     type: number
@@ -687,6 +700,7 @@ spec:
           container_count: ${{ parameters.container_count }}
           container_port: ${{ parameters.container_port }}
           use_load_balancer: ${{ parameters.use_load_balancer }}
+          load_balancer_path: ${{ parameters.load_balancer_path }}
           load_balancer_priority: ${{ parameters.load_balancer_priority }}
           enable_datadog: ${{ parameters.enable_datadog }}
 

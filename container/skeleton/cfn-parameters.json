@@ -29,7 +29,7 @@
   {% if values.container_port %}"ContainerPort": "${{ values.container_port }}",{% endif %}
   {% if values.use_load_balancer %}
   "AlbRulePriority": "${{ values.load_balancer_priority }}",
-  "AlbRulePath": "*",
+  "AlbRulePath": "${{ values.load_balancer_path }}",
   "VpcId": "/org/networking/VpcId",
   {% endif -%}
   "VpcSubnets": "/org/networking/VpcPublicSubnets"
