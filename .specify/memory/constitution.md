@@ -1,21 +1,16 @@
 <!--
 Sync Impact Report
-Version change: unratified placeholder scaffold -> 1.0.0
-Modified principles: placeholder principles -> I. Every Option Combination Renders Correctly;
-  II. The Catalog Drives the Inputs; III. Published Repositories and Entities Are Predictable;
-  IV. Steps Are Ordered, Optional, and Fail Safely; V. Credentials and Secrets Stay Out of
-  Templates; VI. The Form Is Honest and Templates Are Consistent.
-Added sections: Scope and Applicability; Development Workflow and Quality Gates.
+Version change: 1.0.0 -> 1.1.0
+Modified principles: None.
+Added sections: None.
+Expanded sections: Development Workflow and Quality Gates adds a handbook evaluation gate for
+  new features and changes to generated behavior.
 Removed sections: None.
-Rules omitted and why: Workflow-template branch and pull-request rules are omitted because this
-  repository contains only project templates. User-credential requirements for Copilot and Spec
-  Kit actions are omitted because no such actions are present. External Datadog provisioning
-  requirements are omitted because Datadog is rendered as project configuration, not provisioned
-  by an external scaffolder step.
+Templates requiring updates: None; plan-template.md derives its Constitution Check from this file.
 Follow-up TODOs: Existing templates hard-code the GitHub organization, default optional feature
   flags to true, offer Python although its starter is marked TODO, use different first parameter
-  pages, and do not define output links. These implementation gaps are recorded for conformance
-  follow-up; this update changes only the constitution.
+  pages, and do not define output links. These implementation gaps remain recorded for
+  conformance follow-up.
 -->
 
 # backstage-aws-sam-ecs-template Constitution
@@ -142,6 +137,12 @@ projects; each generated project's own constitution governs those concerns.
 - Changes to template inputs, generated files, required catalog entities, required secrets,
   required Backstage actions, or other prerequisites MUST update the repository `README.md` in
   the same change; update a generated project README when it is affected.
+- Every new feature, and every change to a template option or generated file, MUST be
+  evaluated against the generated project handbooks in `cluster/skeleton/docs/handbook/` and
+  `container/skeleton/docs/handbook/`. The specification or plan MUST record which handbook
+  pages the change affects, or state that none are affected. Affected pages MUST be updated in
+  the same change so the handbook describes what the template actually renders, including
+  features, form inputs, configuration, architecture, CI/CD, observability, and common tasks.
 - A new or changed scaffolder action MUST be identified in the README together with the Backstage
   module that provides it.
 - Generated, operating-system, and editor files, including `.DS_Store`, `__pycache__`, and
@@ -150,8 +151,8 @@ projects; each generated project's own constitution governs those concerns.
   Commit messages MUST use conventional-commit style such as `feat:`, `fix:`, or `refactor:`.
   Changes MUST merge through pull requests.
 
-These gates validate the rendered result and keep template documentation and prerequisites in
-sync with the scaffolder behavior.
+These gates validate the rendered result and keep template documentation, generated handbooks,
+and prerequisites in sync with the scaffolder behavior.
 
 ## Governance
 
@@ -164,4 +165,4 @@ MINOR adds a principle or materially expands a section; PATCH clarifies wording 
 non-semantic refinement. Amendments and pull requests MUST describe their impact and verify
 compliance with the resulting constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
+**Version**: 1.1.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
