@@ -1,67 +1,90 @@
 # Observability
 
-## Container and Service Connect logs
+## Container logging
 
-The application container uses the `awslogs` driver. It creates or writes to
-`/aws/ecs/<cluster-name>/<stack-name>` in the deployment region, with
-`app` as the stream prefix. The Service Connect configuration writes to the
-same group with the `sidecar` prefix. When Datadog is enabled, the Datadog
-Agent container also uses this log configuration.
+All containers in the task use the `awslogs` driver and write to one log group,
+`/aws/ecs/<cluster-name>/<stack-name>`, in the deployment region:
 
-The template does not set CloudWatch log-group retention. Set an explicit
-retention policy appropriate to the service and data classification. The
-application image must write useful output to stdout/stderr for it to appear
-in the `app` stream.
+| Stream prefix | Source |
+| --- | --- |
+| `app/<component>/<task-id>` | Application container stdout and stderr |
+| `sidecar/...` | Service Connect proxy, and the Datadog Agent when enabled |
 
-Avoid logging credentials, tokens, or sensitive request payloads. Scrub
-application logs before enabling verbose/debug output, and use the smallest
-amount of operational data necessary for troubleshooting.
+The driver creates the group on first use (`awslogs-create-group: true`), so it
+is not a CloudFormation resource: it has **no retention policy** and is not
+deleted with the stack. Set retention explicitly and clean it up when the
+service is retired.
+
+The application must write useful output to stdout/stderr; files written inside
+the container are not collected. Prefer structured (JSON) log lines that include
+a request or correlation ID.
+
+Never log tokens, credentials, or sensitive request payloads. Sanitize output
+before enabling verbose or debug logging.
 
 ## ECS service and task health
 
-Use ECS service events and task state to diagnose deployments, placement,
-image-pull, and health-check problems. The deployment circuit breaker is
-enabled and configured to roll back a failed deployment. If using the ALB,
-the target group performs an HTTP health check on `/` at the container port
-with short interval/timeout settings. Ensure the application serves that path
-successfully before routing traffic.
+| Signal | Where | Meaning |
+| --- | --- | --- |
+| Service events | ECS console or `aws ecs describe-services` | Placement, deployment, target registration, and circuit-breaker messages. |
+| Stopped reason | Stopped tasks | Image-pull failures, essential-container exits, and failed health checks. |
+| Target health | Target group | Result of the ALB's HTTP `/` check every 5 seconds; 2 consecutive failures mark a target unhealthy. |
+| Container health | Task details | Only when you add a `HealthCheck`; the Datadog Agent has its own `agent health` check. |
 
-There is no application-container health check in the task definition by
-default. Add one if the image needs a process-level health signal. The
-Datadog Agent sidecar has its own `agent health` check when enabled.
+The 60-second health-check grace period lets slow-starting tasks come up before
+failing ALB checks count. If the application needs longer, raise
+`HealthCheckGracePeriodSeconds` rather than loosening the checks.
 
 ## Metrics
 
-ECS and Fargate expose service/task metrics such as CPU and memory utilization.
-The ALB and target group expose request count, latency, and healthy/unhealthy
-target metrics when load balancing is enabled. CloudWatch Logs Insights can
-help inspect container log streams. The starter does not define alarms,
-dashboards, autoscaling policies, or application-specific metrics; add these
-to the service based on its reliability and capacity requirements.
+ECS publishes service `CPUUtilization` and `MemoryUtilization`. With the load
+balancer, the ALB publishes per-target-group `RequestCount`,
+`TargetResponseTime`, `HTTPCode_Target_5XX_Count`, `HealthyHostCount`, and
+`UnHealthyHostCount`. Task-level metrics require Container Insights, which the
+cluster leaves at the account default.
 
-## Datadog integration
+Filter by the deployed service name, cluster, and target group. Watch error
+rates, unhealthy targets, and memory alongside request counts.
 
-The Backstage form can enable a Datadog Agent sidecar. The generated task
-definition passes `DD_API_KEY`, `DD_SITE`, and `ECS_FARGATE=true` and configures
-a sidecar health check. It does not explicitly configure log collection,
-application tracing, or custom metrics. Confirm the Agent configuration and
-account-level Datadog integration before assuming those signals are available.
+The starter does not emit custom application metrics, configure alarms,
+dashboards, or autoscaling, or enable tracing. Add these intentionally based
+on the service's reliability targets.
 
-Supply the API key and site through GitHub secrets used by the deployment. Do
-not commit keys. Container labels provide `com.datadoghq.tags.domain`,
-`system`, `component`, and `code_branch` metadata to support resource
-identification.
+## Availability in Datadog
+
+The Datadog AWS integration and log shipping are **configured automatically in
+all AWS accounts**. Developers do not need to enable the integration or
+configure log forwarding for generated services. Use Datadog to inspect the
+service's AWS metrics and the shipped CloudWatch container logs.
+
+Baseline tagging is also automatic: `cfn-tags.json` supplies `org:domain`,
+`org:system`, and `org:component`, `ServerlessOpsIO/gha-deploy-aws-sam` adds
+additional deployment tags, and the application container's Docker labels set
+Datadog `domain`, `system`, `component`, and `code_branch` tags. Use the
+existing tags to locate and distinguish resources; extra tagging is only needed
+for service-specific requirements.
+
+When the Datadog sidecar is enabled, it adds live container and process-level
+metrics from inside the task. It does not configure APM tracing or DogStatsD;
+add those intentionally, including the application-side library.
+
+After deployment, verify that a sanitized test log and recent ECS metrics appear
+in Datadog. If data is missing, first confirm it exists in CloudWatch and check
+the Datadog time range and filters. Treat persistent missing data as a problem
+with the existing collection or shipping configuration, not a requirement to
+set up a new integration.
 
 ## Investigation checklist
 
-1. Record the deployment time, stack name, ECS cluster/service, task revision,
-   and image tag.
-2. Inspect CloudFormation events and ECS service events for rollout, placement,
-   networking, and image-pull failures.
-3. Check task stopped reason and the application/sidecar CloudWatch log streams
-   without copying secrets or sensitive payloads into tickets.
-4. For load-balanced traffic, compare ALB target health and request/latency
-   metrics with the container health endpoint.
-5. Check Datadog separately; first establish whether expected logs and metrics
-   exist in CloudWatch/AWS before treating missing Datadog data as an
-   application failure.
+1. Note the timestamp, request path, status, and any request ID.
+2. Determine where the request stopped: a 503 from the ALB means no healthy
+   targets; the cluster's fixed response means the path matched no rule; an
+   application status code means the request reached a task.
+3. Check the ECS service events and stopped-task reasons for crashes, failed
+   health checks, image-pull errors, or a circuit-breaker rollback.
+4. Read the `app` log streams for the affected tasks, without copying sensitive
+   payloads into tickets.
+5. Compare error, latency, CPU, and memory metrics with recent deployments and
+   the running image tag.
+6. Check Datadog ingestion separately if CloudWatch data is present but missing
+   from Datadog.

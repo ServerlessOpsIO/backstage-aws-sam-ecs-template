@@ -6,70 +6,72 @@
 | --- | --- | --- |
 | `.github/workflows/main.yml` (`Main`) | Push to `main` | `workflow_dispatch` |
 
-There is no pull-request trigger and no non-main branch workflow in this
-cluster skeleton. A push to a feature branch does not run this workflow
-automatically. A manual dispatch can select a ref; review the selected ref
-carefully because the deployment job still targets the configured stack.
+There is no `pull_request` trigger and no non-main branch workflow. A push to a
+feature branch runs nothing. Manual dispatch can select any ref and still
+**deploys**; select the intended ref carefully.
 
-Both jobs run on `ubuntu-latest` and grant `contents: read` and `id-token:
-write`. The latter permits OIDC-based AWS role assumption rather than storing
-long-lived AWS credentials in the repository.
+Both jobs run on `ubuntu-latest` and grant `contents: read` and
+`id-token: write`. The latter allows OIDC-based AWS role assumption rather than
+committing long-lived AWS credentials.
 
 ## Build job
 
-The build job runs these steps:
+The build job executes these steps in order:
 
-1. `ServerlessOpsIO/gha-setup-workspace@v2` prepares the workspace.
-2. `ServerlessOpsIO/gha-assume-aws-credentials@v1` obtains build-account
-   credentials using `AWS_CICD_ACCOUNT_ID`.
-3. `aws-actions/setup-sam@v3` installs AWS SAM.
-4. `sam validate --lint` validates the SAM/CloudFormation template.
+1. `ServerlessOpsIO/gha-setup-workspace@v2` sets up the checked-out workspace.
+2. `ServerlessOpsIO/gha-assume-aws-credentials@v1` obtains credentials using
+   `AWS_CICD_ACCOUNT_ID`.
+3. `aws-actions/setup-sam@v3` installs SAM.
+4. `sam validate --lint` validates the template with CloudFormation linting.
 5. `sam build --parallel --template template.yaml` builds the SAM artifact.
-6. `ServerlessOpsIO/gha-store-artifacts@v2` stores the build output for deploy.
+6. `ServerlessOpsIO/gha-store-artifacts@v2`, with `use_aws_sam: true`, stores
+   the build output for the deploy job.
 
-The cluster workflow does not run application unit tests, because this
-repository contains no application code or tests. It also does not generate
-TechDocs.
+There are no unit tests because the repository contains no application code.
+`sam validate --lint` does not catch account-specific problems such as missing
+SSM parameters, IAM permissions, or certificate validation. TechDocs generation
+is not a workflow step.
 
 ## Deploy job
 
-The deploy job depends on a successful build and uses the GitHub Actions
-environment named `production`.
+`deploy` depends on `build` and only proceeds after it succeeds. It uses the
+GitHub environment named **`production`**.
 
-1. The workspace action retrieves the build artifact with
-   `checkout_artifact: true`.
-2. The credential action receives `AWS_CICD_ACCOUNT_ID` and
-   `DEPLOYMENT_ACCOUNT_ID`.
-3. `ServerlessOpsIO/gha-deploy-aws-sam@v1` deploys the SAM template to the
-   deployment account and receives the workflow environment, variables, and
-   secrets for parameter and tag expression resolution.
+1. The workspace action runs with `checkout_artifact: true` to retrieve the
+   build artifact.
+2. The credential action receives both `AWS_CICD_ACCOUNT_ID` and
+   `DEPLOYMENT_ACCOUNT_ID` for build/deployment account access.
+3. `ServerlessOpsIO/gha-deploy-aws-sam@v1` deploys with the target account ID
+   and serialized workflow environment, variables, and secrets.
 
 The shared actions implement artifact handling, credential assumptions, and
-deployment input resolution. Their internals are external to this repository.
-Verify the required IAM roles, region, artifact storage, and final stack-name
-behavior against the action configuration. GitHub environment protection rules
-can require approval or restrict deployment access.
+parameter/tag expression resolution. Their internals are external to this
+repository. Confirm the expected IAM roles, region, artifact storage, and
+stack-name behavior against the shared actions' configuration.
 
-See [Configuration](03-configuration.md) for repository secrets and AWS
-prerequisites.
+See [Configuration](03-configuration.md) for parameter files, tags, secrets,
+and AWS prerequisites. GitHub environment protection rules can require
+deployment approval or restrict which refs deploy.
 
 ## Branch and manual deployment isolation
 
 `CodeBranch` becomes an SSM path segment, but `samconfig.toml` sets one
-component-wide stack name. The workflow's deployment environment is always
-`production`. A manual dispatch from another ref can therefore update the same
-stack while publishing values under a different branch path. Do not treat
-manual dispatch as an isolated preview deployment.
+component-wide stack name and the hostname is fixed. A manual dispatch from
+another ref therefore **updates the same stack**, unless the shared deployment
+action branch-qualifies the stack name, and replaces its SSM
+parameters with ones under a different branch path. Because the stack owns
+those parameters, the `main` path is deleted in that update, and every service
+that reads `/<domain>/<system>/<component>/main/...` fails its next deployment.
 
-Before enabling non-main deployments, define and verify a platform policy for
-branch-specific stack naming, account/environment selection, and cleanup.
-Confirm the final stack name and all SSM paths in the deployment output. No
-branch-deletion cleanup workflow is included.
+Do not dispatch from a non-main ref unless you have established a platform
+policy for branch-specific stack names, hostnames, accounts or environments,
+and teardown. There is no branch-deletion cleanup workflow.
 
 ## Reviewing a deployment
 
-Review the GitHub Actions build and deploy logs, then inspect the deployed
-CloudFormation stack status, resources, and SSM parameter values. With the ALB
-enabled, verify certificate validation and DNS before relying on its endpoint.
-The listener's fixed response only confirms that the ALB listener responds; it
-does not verify a consuming service. See [Observability](06-observability.md).
+Inspect the GitHub Actions build and deploy logs, then check the CloudFormation
+stack status, events, and resources. With the ALB, the first deployment waits
+for ACM DNS validation; a long-running `SiteCertificate` usually means the
+hosted zone is wrong or not authoritative. Confirm the SSM parameter values,
+then request the hostname: the fixed `{ "healthy": true }` response confirms
+DNS, TLS, and the listener only. See [Observability](06-observability.md).

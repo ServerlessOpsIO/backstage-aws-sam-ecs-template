@@ -2,32 +2,37 @@
 
 This handbook describes the AWS ECS cluster generated for
 **${{ values.component_name }}**. Keep it current as the cluster infrastructure,
-deployment assumptions, and workflows change.
+its integration contract, and workflows change.
 
-- [Features](01-features.md): ECS cluster capabilities and exported integration points.
-- [Creating a component](02-creating-a-component.md): Backstage form inputs and generated outputs.
-- [Configuration](03-configuration.md): CloudFormation parameters, tags, and deployment prerequisites.
-- [Architecture](04-architecture.md): AWS resources, relationships, and generated repository layout.
-- [CI/CD pipeline](05-ci-cd.md): workflow triggers, build/deploy steps, and branch caveats.
-- [Observability](06-observability.md): available AWS metrics and logging boundaries.
-- [Common tasks](07-common-tasks.md): deploy, integrate a service, and change cluster settings.
+- [Features](01-features.md): ECS cluster, Service Connect, optional shared ALB, DNS/TLS, and the SSM integration contract.
+- [Creating a component](02-creating-a-component.md): Backstage form pages and generated outputs.
+- [Configuration](03-configuration.md): deployment parameters, tags, and prerequisites.
+- [Architecture](04-architecture.md): AWS resources, request routing, template relationships, and repository layout.
+- [CI/CD pipeline](05-ci-cd.md): build, deployment, and branch caveats.
+- [Observability](06-observability.md): metrics, logging boundaries, and automatic Datadog integration.
+- [Common tasks](07-common-tasks.md): validate, deploy, connect services, and change cluster settings.
 
-## Reading this handbook
+## Reading in Backstage
 
-The pages can be read directly in GitHub from `docs/handbook/`. The generated
-`catalog-info.yaml` does not currently set `backstage.io/techdocs-ref`, and the
-repository does not include an `mkdocs.yml`; the handbook is therefore not
-automatically configured for TechDocs. To publish it in Backstage, configure
-the repository's TechDocs site and catalog annotation using the platform's
-standard documentation setup.
+The component's `catalog-info.yaml` contains `backstage.io/techdocs-ref: dir:.`.
+TechDocs uses the repository-root `mkdocs.yml` and the Markdown files in
+`docs/handbook/`.
+Open the component in the catalog and select **Docs**.
 
-Paths shown in backticks are relative to the generated repository root unless
-otherwise noted. The cluster template is rendered from this repository's
-`cluster/skeleton/` and its workflow from `cluster/pipeline/`.
+The platform must enable the TechDocs frontend and backend and configure either
+on-demand documentation generation or an external builder and publisher. The
+builder needs MkDocs and `mkdocs-techdocs-core` for the `techdocs-core` plugin.
+The generated cluster workflow does not build or publish documentation.
+With the Backstage TechDocs CLI and its Docker prerequisites installed, preview
+from the generated repository root with `techdocs-cli serve`.
+
+The pages can also be read directly in GitHub. Paths shown in backticks are
+relative to the generated repository root. The template source repository
+keeps their inputs under `cluster/skeleton/` and `cluster/pipeline/`.
 
 ## Content review
 
-Review this starter handbook against your AWS account, network and DNS
-conventions, repository policies, and operational requirements before relying
-on it as a production runbook. Template-generated documentation does not
-constitute human approval.
+Before treating this starter handbook as the cluster's operational reference,
+review its network exposure, DNS and TLS configuration, deployment assumptions,
+integration contract, and runbooks against your AWS account and organization
+conventions. Template-generated documentation does not constitute human approval.

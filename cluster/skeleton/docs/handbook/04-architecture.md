@@ -1,103 +1,130 @@
 # Architecture
 
-## Logical architecture
+## Infrastructure
 
-The cluster stack provides shared ECS and networking integration points:
+### Logical architecture
 
-- The ECS cluster is configured with Service Connect defaults.
-- A conditional internet-facing ALB provides an HTTPS listener and a DNS
-  endpoint, but the starter listener returns a fixed response rather than
-  forwarding to an application.
-- SSM parameters publish the cluster name, Service Connect namespace, and
-  (when enabled) ALB listener and security group identifiers.
-- Consuming application stacks create services, tasks, capacity, target groups,
-  and routing rules as needed.
+The cluster is shared platform infrastructure. It separates the public entry
+point, workload placement, and service discovery, and it publishes an
+integration contract for the services that run in it:
+
+- The ECS cluster is the placement boundary for services. It owns no compute
+  capacity; consuming services run on Fargate.
+- The cluster's Service Connect namespace gives services in the system a
+  private discovery domain.
+- An optional shared, internet-facing ALB terminates TLS for one hostname.
+  Each consuming service attaches its own listener rule and target group.
+- SSM parameters publish the identifiers consumers need, so service stacks never
+  hard-code generated names or ARNs.
 
 #### Logical architecture diagram
 
 ```mermaid
 flowchart LR
-    Scaffold["Backstage scaffolder"]
-    Workflow["GitHub Actions: SAM build and deploy"]
-    Stack["CloudFormation cluster stack"]
+    Client["Internet client"]
+    Entry["Shared HTTPS entry point (optional)"]
+    Default["Default fixed response"]
     Cluster["ECS cluster"]
     Namespace["Service Connect namespace"]
-    ALB["Optional public ALB + HTTPS listener"]
-    DNS["Route 53 alias + ACM certificate"]
-    Params["SSM integration parameters"]
-    Service["Consuming ECS service stack"]
+    Contract["SSM integration contract"]
+    Services["Consuming ECS services"]
 
-    Scaffold --> Workflow --> Stack
-    Stack --> Cluster
-    Cluster --> Namespace
-    Stack -. conditional .-> ALB
-    ALB --> DNS
-    Stack --> Params
-    Params --> Service
-    Service --> Cluster
-    Service -. when using shared ALB .-> ALB
+    Client --> Entry
+    Entry -->|"No service rule matches"| Default
+    Entry -->|"Service path rule"| Services
+    Services -->|"Run in"| Cluster
+    Services -->|"Discover each other through"| Namespace
+    Contract -.->|"Read at deploy time"| Services
+    Cluster -.->|"Publishes"| Contract
 ```
 
-The ALB listener has a fixed-response default action and no target group or
-application route in this template. A service stack must configure its own
-target registration and routing rules before the ALB can serve application
-traffic.
+#### Request routing call sequence
 
-## Physical architecture
+The listener evaluates rules added by consuming services in ascending priority
+order and falls back to the cluster's default action.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant DNS as Route 53
+    participant ALB as Shared ALB HTTPS listener
+    participant Rule as Service listener rule
+    participant Target as Service target group
+
+    Client->>DNS: Resolve hostname
+    DNS-->>Client: ALB addresses (alias record)
+    Client->>ALB: HTTPS request on 443
+    Note over ALB: TLS terminated with the stack's ACM certificate
+    alt Path matches a service rule
+        ALB->>Rule: Matching rule with the lowest priority value
+        Rule->>Target: Forward to a healthy task IP
+        Target-->>Client: Service response
+    else No service rule matches
+        ALB-->>Client: 200 fixed response with healthy true
+    end
+```
+
+The fixed response is the listener's default action. It does not indicate that
+any service is running or healthy.
+
+### Physical architecture
 
 ```mermaid
 flowchart TD
-    VPC["Existing VPC"]
-    Subnets["Existing public subnets (ALB only)"]
-    Zone["Existing Route 53 hosted zone (ALB only)"]
-    ECS["ECS cluster"]
-    SC["Service Connect default namespace"]
-    SG["ALB security group: inbound TCP 443 from 0.0.0.0/0"]
-    ALB["Internet-facing Application Load Balancer"]
-    Listener["HTTPS listener :443; fixed JSON response"]
-    Cert["ACM DNS-validated certificate"]
+    Zone["Route 53 hosted zone (existing)"]
     Record["Route 53 alias A record"]
-    SSM["SSM parameters: cluster, namespace, ALB identifiers"]
-    Consumer["Consuming service stack (external)"]
+    Certificate["ACM certificate"]
+    Subnets["Public subnets (existing)"]
+    SG["ALB security group: TCP 443 from 0.0.0.0/0"]
+    ALB["Internet-facing ALB"]
+    Listener["HTTPS listener :443"]
+    Cluster["ECS cluster"]
+    CloudMap["Cloud Map namespace: system-name.local"]
+    SSM["SSM parameters"]
+    Services["Consuming service stacks (external)"]
 
-    VPC --> ECS
-    ECS --> SC
-    VPC --> SG
-    Subnets --> ALB
-    SG --> ALB
+    Zone --- Record
+    Record -->|"Alias target"| ALB
+    Certificate -->|"TLS certificate"| Listener
+    Zone -.->|"DNS validation records"| Certificate
+    Subnets --- ALB
+    SG --- ALB
     ALB --> Listener
-    Cert --> Listener
-    Zone --> Cert
-    Zone --> Record
-    ALB --> Record
-    ECS --> SSM
-    Listener --> SSM
-    SSM --> Consumer
-    Consumer --> ECS
-    Consumer -. optional target/rule integration .-> Listener
+    Cluster -->|"Service Connect default"| CloudMap
+    Services -->|"Listener rules and target groups"| Listener
+    Services -->|"Fargate services"| Cluster
+    SSM -.->|"Resolved at deploy time"| Services
 ```
 
-The VPC, subnet list, and hosted zone are external prerequisites. When the load
-balancer is disabled, the unconditional ALB security-group SSM parameter
-currently references the conditionally omitted security group; that template
-path must be fixed before use.
+`template.yaml` owns the cluster, SSM parameters, and the optional ALB, its
+security group, listener, certificate, and DNS record. The VPC, subnets, hosted
+zone, the `/org/...` SSM parameters, and CI roles are external dependencies.
+The ALB, listener, certificate, DNS record, and their security group are
+omitted when the ALB is disabled.
 
-## CloudFormation template
+### CloudFormation template
 
-`template.yaml` is the infrastructure-as-code entry point. The
-`Transform: AWS::Serverless-2016-10-31` enables AWS SAM and CloudFormation
-expands the template during deployment.
+`template.yaml` is the infrastructure-as-code entry point. Its
+`Transform: AWS::Serverless-2016-10-31` enables AWS SAM processing; the
+resources themselves are standard CloudFormation ECS, EC2, Elastic Load
+Balancing, ACM, Route 53, and SSM types. Backstage renders the template's Nunjucks conditional
+blocks at creation time, so the generated file contains only the resources
+for the selected option rather than CloudFormation `Conditions`.
 
 | Section/resource | Purpose |
 | --- | --- |
-| `Parameters` | Supplies organizational identifiers, branch slug, VPC, Service Connect namespace, and conditional ALB/DNS values. |
-| `EcsAlbSecurityGroup` | Allows inbound TCP 443 from any IPv4 address; created only when the ALB option is enabled. |
-| `SiteCertificate`, `EcsAlb`, `EcsAlbListener`, `SiteDnsRecord` | Conditional ACM, ALB, listener, and DNS resources. |
-| `EcsCluster` | Creates the cluster and its Service Connect defaults. |
-| `EcsClusterNameSsmParam`, `ServiceConnectNamespaceSsmParam` | Publish shared cluster integration values. |
-| `ClusterAlbSecurityGroupIdSsmParam`, `EcsAlbListenerArnSsmParam` | Publish ALB integration values; the listener parameter is conditional, but the security-group parameter is currently unconditional. |
+| `Parameters` | Domain/system/component metadata, branch slug, VPC, Service Connect namespace, and, with the ALB, subnets, hostname, and hosted zone. |
+| `EcsCluster` | The cluster and its Service Connect default namespace. |
+| `EcsAlbSecurityGroup`, `EcsAlb`, `EcsAlbListener` | Shared ALB, its public ingress, and the HTTPS listener with a fixed-response default action. |
+| `SiteCertificate`, `SiteDnsRecord` | DNS-validated certificate and alias record for the hostname. |
+| `EcsClusterNameSsmParam`, `ServiceConnectNamespaceSsmParam` | Always-published integration values. |
+| `EcsAlbListenerArnSsmParam` | Listener ARN; rendered with the ALB. |
+| `ClusterAlbSecurityGroupIdSsmParam` | ALB security-group ID; currently rendered unconditionally. |
 
 #### Template resource relationships
+
+Arrows run from the referencing resource to its target; they show
+infrastructure references, not request flow.
 
 ```mermaid
 flowchart TD
@@ -105,50 +132,60 @@ flowchart TD
     Subnets["VpcSubnets parameter"]
     ZoneId["DnsZoneId parameter"]
     Hostname["Hostname parameter"]
-    ECS["EcsCluster"]
-    Namespace["ServiceConnectNamespace parameter"]
+    NamespaceParam["ServiceConnectNamespace parameter"]
+    Path["Domain / System / Component / CodeBranch parameters"]
+    Cluster["EcsCluster"]
     SG["EcsAlbSecurityGroup"]
     ALB["EcsAlb"]
     Listener["EcsAlbListener"]
     Cert["SiteCertificate"]
     Record["SiteDnsRecord"]
-    ClusterParam["EcsClusterNameSsmParam"]
-    SGParam["ClusterAlbSecurityGroupIdSsmParam"]
-    ListenerParam["EcsAlbListenerArnSsmParam"]
-    NamespaceParam["ServiceConnectNamespaceSsmParam"]
+    ClusterSsm["EcsClusterNameSsmParam"]
+    NamespaceSsm["ServiceConnectNamespaceSsmParam"]
+    ListenerSsm["EcsAlbListenerArnSsmParam"]
+    SgSsm["ClusterAlbSecurityGroupIdSsmParam"]
 
-    ECS --> Namespace
-    ECS --> ClusterParam
-    ECS --> NamespaceParam
-    VpcId --> SG
-    SG --> ALB
-    Subnets --> ALB
-    ALB --> Listener
-    Listener --> ListenerParam
-    SG --> SGParam
-    Hostname --> Cert
-    ZoneId --> Cert
-    Cert --> Listener
-    Hostname --> Record
-    ZoneId --> Record
-    ALB --> Record
+    Cluster -->|"ServiceConnectDefaults"| NamespaceParam
+    SG -->|"VpcId"| VpcId
+    ALB -->|"Subnets"| Subnets
+    ALB -->|"SecurityGroups"| SG
+    Listener -->|"LoadBalancerArn"| ALB
+    Listener -->|"CertificateArn"| Cert
+    Cert -->|"DomainName"| Hostname
+    Cert -->|"Validation HostedZoneId"| ZoneId
+    Record -->|"Name"| Hostname
+    Record -->|"HostedZoneId"| ZoneId
+    Record -->|"AliasTarget"| ALB
+    ClusterSsm -->|"Value"| Cluster
+    NamespaceSsm -->|"Value"| NamespaceParam
+    ListenerSsm -->|"Value"| Listener
+    SgSsm -->|"Value"| SG
+    ClusterSsm -.->|"Name path"| Path
+    NamespaceSsm -.->|"Name path"| Path
+    ListenerSsm -.->|"Name path"| Path
+    SgSsm -.->|"Name path"| Path
 ```
 
-All ALB resources are conditional except `ClusterAlbSecurityGroupIdSsmParam`;
-that inconsistency explains why the no-ALB rendering is invalid.
+`SgSsm → SG` is the reference that breaks the ALB-disabled rendering.
+`cfn-parameters.json` and `cfn-tags.json` provide deployment-action inputs,
+while `samconfig.toml` supplies SAM defaults. Validate changes with
+`sam validate --lint` and `sam build` before deployment.
 
-## Generated repository layout
+## Repository file layout
 
 ```text
-catalog-info.yaml              Backstage Component entity
-README.md                       Generated component summary
-template.yaml                   SAM/CloudFormation cluster infrastructure
-cfn-parameters.json             Deployment-action parameter expressions
-cfn-tags.json                   Deployment-action tag expressions
-samconfig.toml                  SAM stack and build defaults
-docs/handbook/                  This handbook
-.github/workflows/main.yml      Main-branch build and deployment workflow
+catalog-info.yaml          Backstage Component entity
+mkdocs.yml                 TechDocs site configuration
+docs/handbook/             Handbook pages
+README.md                  Project entry point
+template.yaml              SAM/CloudFormation cluster infrastructure
+cfn-parameters.json        Deployment-action parameter expressions
+cfn-tags.json              Deployment-action tag expressions
+samconfig.toml             SAM build, validation, and deploy defaults
+.github/workflows/main.yml Main-branch build and deployment workflow
 ```
 
-The cluster repository has no application source code or tests. ECS services
-and their application artifacts are managed by separate consuming components.
+These are generated-project paths. The template source repository keeps their
+inputs under `cluster/skeleton/` and `cluster/pipeline/` before the scaffolder
+combines them. The cluster repository has no application source code or tests;
+services and their images live in separate consuming components.

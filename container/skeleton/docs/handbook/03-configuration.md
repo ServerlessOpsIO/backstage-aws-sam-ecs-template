@@ -2,93 +2,104 @@
 
 ## Stack parameters: `cfn-parameters.json`
 
-This file supplies the deployment action with values for the CloudFormation
-`Parameters` in `template.yaml`. It is a deployment-action input rather than a
-standalone SAM parameter-override file.
+This file supplies the deployment action with values for the `Parameters` in
+`template.yaml`. The file is named **`cfn-parameters.json`**, without a leading
+underscore. Which entries exist depends on the options selected in Backstage.
 
 | Parameter | Starter value/source | Meaning |
 | --- | --- | --- |
-| `Domain` | Selected catalog domain name | Application domain metadata and Docker tag. |
-| `System` | Selected catalog system name | Application system metadata and Docker tag. |
-| `Component` | `$env.GITHUB_REPOSITORY_NAME_PART_SLUG_CS` | Component/container/service identifier derived from the repository name. |
-| `CodeBranch` | `$env.GITHUB_REF_SLUG_CS` | Branch slug used in task-definition family naming and Docker labels. |
-| `ClusterName` | `/<domain>/<system>/<cluster>/main/EcsClusterName` | SSM parameter path resolving to the existing ECS cluster. |
-| `ClusterServiceConnectNamespace` | `/<domain>/<system>/<cluster>/main/ServiceConnectNamespace` | SSM parameter path resolving the cluster's Service Connect namespace. |
-| `ClusterAlbListenerArn` | `/<domain>/<system>/<cluster>/main/EcsAlbListenerArn` when load balancing is enabled | Existing cluster ALB listener. |
-| `ClusterAlbSecurityGroupId` | `/<domain>/<system>/<cluster>/main/ClusterAlbSecurityGroupId` when load balancing is enabled | Existing ALB security group used as the service ingress source. |
-| `ContainerImage` | Selected image name, or repository-derived value for a development image | Container image repository. |
-| `ContainerTag` | Selected tag (default `latest`), or workflow commit tag for a development image | Image tag appended to the repository. |
-| `ContainerCpu` | Backstage value (default `1024`) | Fargate task CPU units. |
-| `ContainerMemory` | Backstage value (default `2048`) | Fargate task memory in MB. |
-| `ContainerDesiredCount` | Backstage value (default `3`) | Number of desired service tasks. |
-| `EnableContainerExec` | `false` | Whether to enable ECS Exec in the service. |
-| `ContainerPort` | Selected port when required by the load-balancer form | Container port for port mapping and Service Connect. |
-| `AlbRulePriority`, `AlbRulePath`, `VpcId` | Supplied when load balancing is enabled | Shared ALB route, listener priority, and VPC used by the target group/security group. |
-| `VpcSubnets` | `/org/networking/VpcPublicSubnets` | SSM parameter resolving to subnet IDs. |
-| `DatadogApiKey`, `DatadogSite` | Datadog deployment secrets when enabled | Agent credentials and Datadog site. |
+| `Domain`, `System` | Selected catalog domain and system names | Deployment metadata and Datadog Docker labels. |
+| `Component` | `$env.GITHUB_REPOSITORY_NAME_PART_SLUG_CS` | Service name, container name, Service Connect name, and Docker label. |
+| `CodeBranch` | `$env.GITHUB_REF_SLUG_CS` | Task-definition family suffix and Docker label. |
+| `ClusterName` | `/<domain>/<system>/<cluster>/main/EcsClusterName` | **SSM parameter name** resolving the cluster name. |
+| `ClusterServiceConnectNamespace` | `/<domain>/<system>/<cluster>/main/ServiceConnectNamespace` | SSM parameter name resolving the Service Connect namespace. |
+| `ClusterSecurityGroupId` | `/<domain>/<system>/<cluster>/main/ContainerSecurityGroupId` | **Stale entry**: `template.yaml` declares no such parameter and the cluster publishes no such SSM value. See the note below. |
+| `ClusterAlbListenerArn` | `/<domain>/<system>/<cluster>/main/EcsAlbListenerArn` | Load balancer only. Cluster HTTPS listener. |
+| `ClusterAlbSecurityGroupId` | `/<domain>/<system>/<cluster>/main/ClusterAlbSecurityGroupId` | Load balancer only. Source of allowed ingress to tasks. |
+| `ContainerImage`, `ContainerTag` | Image-based: Backstage values. Development: `$env.GITHUB_REPOSITORY_NAME_PART_SLUG` and `$env.GITHUB_SHA`. | Image repository and tag. |
+| `ContainerRepo`, `ContainerOrg` | Development only: `$secrets.AWS_ECR_REPO` and `$env.GITHUB_REPOSITORY_OWNER_PART_SLUG` | ECR registry and repository namespace prefixed to the image. |
+| `ContainerCpu`, `ContainerMemory`, `ContainerDesiredCount` | Backstage values | Task size and desired tasks. |
+| `EnableContainerExec` | `"false"` | ECS Exec toggle. |
+| `DatadogApiKey`, `DatadogSite` | Datadog only: `$secrets.DATADOG_AGENT_API_KEY`, `$secrets.DATADOG_SITE` | Agent credentials and site. |
+| `ContainerPort` | Backstage value, when a port was entered | Port mapping, Service Connect, target group, and ingress. |
+| `AlbRulePriority`, `AlbRulePath` | Load balancer only: Backstage values | Listener rule priority and path pattern. |
+| `VpcId` | Load balancer only: `/org/networking/VpcId` | SSM parameter name resolving the VPC for the security group and target group. |
+| `VpcSubnets` | `/org/networking/VpcPublicSubnets` | SSM parameter name resolving the task subnets. |
 
-Exact parameter presence depends on the selected template options. In
-particular, the current skeleton still references `VpcId` and `ContainerPort`
-when load balancing is disabled; see [Features](01-features.md).
+`ClusterName`, `ClusterServiceConnectNamespace`, `ClusterAlb*`, `VpcId`, and
+`VpcSubnets` are SSM parameter names, resolved by CloudFormation through
+`AWS::SSM::Parameter::Value<...>` types at every deployment. A missing parameter
+fails the deployment before any resource changes.
 
-The `$env` and `$secrets` expressions in this file are deployment-action
-expressions and are intentionally not quoted as ordinary JSON values. The
-GitHub workflow passes environment variables, repository/environment
-variables, and secrets to `ServerlessOpsIO/gha-deploy-aws-sam@v1` for
-resolution. Consult that action's configuration when changing expression
-syntax or adding values. Do not commit credentials or replace expressions with
-secret literals.
+`ClusterSecurityGroupId` is passed to the deployment action but has no matching
+template parameter. Whether that is ignored or rejected depends on how the
+shared deployment action builds parameter overrides; if deployments fail on an
+unknown parameter, remove the entry.
+
+The `$env` and `$secrets` expressions are intentionally unquoted in the starter
+file. It is deployment-action input, **not strict JSON** for direct consumption
+by `json.load`, `jq`, or the SAM CLI. The same applies to expressions in
+`cfn-tags.json`. The workflow passes `env_json`, `vars_json`, and
+`secrets_json` to `ServerlessOpsIO/gha-deploy-aws-sam@v1` for resolution.
+Consult that action's configuration when changing expression syntax or adding
+environment-specific values.
+
+For a manual deployment, supply resolved CloudFormation parameter values
+through SAM's parameter overrides. Do not replace `$secrets` references with
+committed credentials.
 
 ## Stack tags: `cfn-tags.json`
 
-The deployment tags are:
+This file is also named without a leading underscore. It defines:
 
 | Tag | Value |
 | --- | --- |
 | `org:domain` | Selected domain name |
 | `org:system` | Selected system name |
-| `org:component` | Repository-derived component identifier |
+| `org:component` | `$env.GITHUB_REPOSITORY_NAME_PART_SLUG_CS` |
 
-Keep these aligned with catalog metadata and inventory/cost-allocation
-conventions. These tags are metadata, not runtime configuration or access
-controls.
+Keep these aligned with catalog metadata and your organization's inventory and
+cost-allocation conventions. CloudFormation propagates stack tags to resources
+that support them, and the service propagates task-definition tags to tasks.
+These metadata tags are not runtime configuration or access controls.
 
 ## Deployment prerequisites
 
-- An AWS target account and region with the IAM permissions required by the
-  shared build/deploy actions and the generated CloudFormation resources.
-- The selected ECS cluster, Service Connect namespace, and required SSM
-  parameters. When using load balancing, the cluster listener and ALB security
-  group must also exist.
-- VPC and subnet values resolvable from the configured SSM parameter paths.
-  The current template assigns public IPs to tasks; review this setting against
-  account networking policy.
-- A container image in a registry the task execution role can pull. The
-  generated task execution role includes ECR read actions; image access and
-  cross-account repository policies must still permit the target account.
-- GitHub Actions secrets `AWS_CICD_ACCOUNT_ID` and `DEPLOYMENT_ACCOUNT_ID`.
-  Scaffolding creates the latter from the selected cloud-account entity title;
-  the former must be configured for the shared build action. With Datadog
-  enabled, configure `DATADOG_AGENT_API_KEY` and `DATADOG_SITE` as well.
-- AWS OIDC trust and roles expected by
-  `ServerlessOpsIO/gha-assume-aws-credentials@v1`. Account IDs alone do not
-  grant AWS access; check the shared action's requirements.
-- GitHub environment `production` settings appropriate for deployments,
-  including any approval and branch restrictions.
+- A target AWS account and region with the IAM permissions required by the
+  generated ECS, EC2, IAM, and Elastic Load Balancing resources.
+- The selected cluster, deployed from `main` in the same account and region,
+  with its SSM parameters under `/<domain>/<system>/<cluster>/main/`. With the
+  load balancer, the cluster must have been created with its ALB.
+- SSM parameters `/org/networking/VpcPublicSubnets` and, with the load
+  balancer, `/org/networking/VpcId`.
+- An image the task execution role can pull. For an image-based service in
+  another account's ECR, that repository's policy must allow the deployment
+  account. Images from other registries may need repository credentials, which
+  the template does not configure.
+- GitHub Actions secrets: `AWS_CICD_ACCOUNT_ID` and `DEPLOYMENT_ACCOUNT_ID`
+  always; `AWS_ECR_REPO` for the development variant; `DATADOG_AGENT_API_KEY`
+  and `DATADOG_SITE` with Datadog. The scaffolder only creates
+  `DEPLOYMENT_ACCOUNT_ID`; configure the others through your organization's
+  repository or environment settings.
+- AWS OIDC trust and build/deployment roles expected by the shared
+  `gha-assume-aws-credentials` action. Account IDs alone do not grant
+  deployment access.
+- GitHub environment `production` settings appropriate for the deploy job,
+  including any required approvals and branch restrictions.
+
+Tasks run in the public subnets with `AssignPublicIp: ENABLED`, which they need
+to reach ECR and CloudWatch without NAT or VPC endpoints. The security group
+only admits the ALB on the container port, but review public IP assignment
+against your network policy.
 
 ## SAM and runtime settings
 
-`samconfig.toml` sets the stack name from the component name, enables cached
-parallel builds and linting, and grants `CAPABILITY_NAMED_IAM` and
-`CAPABILITY_AUTO_EXPAND` for deployment. It does not define separate branch
-stack names. Verify the final stack name used by the shared deployment action.
+`samconfig.toml` sets the default stack name to the component name, enables
+cached parallel builds and linting, disables changeset confirmation, and
+requests `CAPABILITY_NAMED_IAM` and `CAPABILITY_AUTO_EXPAND`. It does not
+define separate branch environments. Verify the final stack name used by the
+shared deployment action.
 
-Container CPU and memory must be a valid Fargate combination. The application
-image defines its own runtime and process behavior; this infrastructure
-template does not select an application language runtime or set a command.
-Review the health-check and port requirements for the image before deployment.
-
-`CodeBranch` changes the task-definition family and is included in Docker
-labels. The stack name and other shared resources are not automatically
-isolated by branch. See [CI/CD pipeline](05-ci-cd.md) before deploying
-additional branches.
+The image defines its own runtime, command, and listening port; the task
+definition sets none of these. Make sure the image listens on `ContainerPort`
+and serves a success response at `/` when using the load balancer.

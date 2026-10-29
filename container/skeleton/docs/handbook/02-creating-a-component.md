@@ -1,113 +1,115 @@
 # Creating an ECS service via Backstage
 
-Choose **Create** in Backstage and select **AWS ECS Service Container**. The
-template creates a public GitHub repository named `<service-name>-app` in
-`ServerlessOpsIO`, then registers the generated Component in Backstage. It
-requires GitHub publishing and catalog registration, the template's custom
-picker fields, and the relevant catalog entities for the owner, domain, system,
-environment, account, and ECS cluster.
+Choose **Create** in Backstage and select either template:
 
-Paths below are relative to the **newly generated repository root**, not the
-template source repository.
+- **AWS ECS Service Container** runs an existing container image.
+- **Containerized Development Application** builds an image from source in the
+  generated repository.
+
+The platform needs GitHub publishing, catalog registration, the template's
+custom form fields, and catalog entities for the choices below, including an
+ECS cluster component created with the **AWS ECS Cluster** template.
 
 ## Page 1: ECS Service Info
 
+Both templates share this page. Paths below are relative to the **newly
+generated repository root**, not the template source repository. Catalog
+selections generally contribute the entity's name rather than its display
+title; Account ID uses the exception noted below.
+
 | Input | Purpose | Where to see it after creation |
 | --- | --- | --- |
-| Namespace | Hidden default is `default`. | `metadata.namespace` in `catalog-info.yaml`. |
-| ECS Service Name | Name used to create the service repository. | Lowercased and suffixed with `-app` for the GitHub repository, `metadata.name` in `catalog-info.yaml`, and the default SAM stack name in `samconfig.toml`. The deployed ECS service name and container name use the generated repository name. |
-| Description | Short description of the component. | GitHub repository description, Component `metadata.description` in `catalog-info.yaml`, and the CloudFormation template description. |
+| ECS Service Name | Base name for the component and repository. The template lowercases it and appends `-app`. | GitHub repository name; Component `metadata.name` and `github.com/project-slug` in `catalog-info.yaml`; `stack_name` in `samconfig.toml`; headings in `README.md` and this handbook; `site_name` in `mkdocs.yml`; the lowercased base name in `template.yaml`'s `Description`. The ECS service name, container name, and Service Connect alias use `Component` in `cfn-parameters.json`, which resolves from the repository-name workflow variable. |
+| Description | Describes the repository, component, and service. | GitHub repository description; Component `metadata.description` in `catalog-info.yaml`; `template.yaml`'s `Description`; `README.md`. In the development variant, also `description` in `src/package.json`. |
 | Owner | Owning group selected from your groups. | Component `spec.owner` in `catalog-info.yaml`; GitHub Settings → Custom properties → `owner`. |
-| Domain | Catalog domain for the component and deployment tags. | `Domain` in `cfn-parameters.json`; `org:domain` in `cfn-tags.json`; GitHub Settings → Custom properties → `domain`. |
-| System | Catalog system, filtered by the chosen domain. | `System` in `cfn-parameters.json`; `org:system` in `cfn-tags.json`; Component `spec.system` in `catalog-info.yaml`; GitHub Settings → Custom properties → `system`. |
-| Environment | Environment associated with the system; it filters the account picker. | The chosen environment is not passed into the generated files. The `main` workflow's deploy job uses the GitHub environment `production`; the branch workflow has no deployment job. |
-| Account ID | Cloud-account catalog resource related to the selected environment. | The selected entity's `metadata.title` is written to the GitHub repository secret `DEPLOYMENT_ACCOUNT_ID`. The value is not written to application files, and GitHub does not reveal a saved secret value. Confirm the catalog entity's title before creation. |
-| Cluster | Existing ECS cluster in the selected system. | Component `spec.dependsOn` in `catalog-info.yaml`; cluster SSM parameter paths in `cfn-parameters.json`. Cluster values are selected from the catalog entity name. |
+| Domain | Catalog domain, also used for deployment metadata, tagging, and the cluster SSM paths. | `Domain` and the first segment of each `Cluster*` SSM path in `cfn-parameters.json`; `org:domain` in `cfn-tags.json`; GitHub Settings → Custom properties → `domain`. |
+| System | Catalog system filtered by the chosen domain; also filters the Cluster picker. | Component `spec.system` in `catalog-info.yaml`; `System` and the second segment of each `Cluster*` SSM path in `cfn-parameters.json`; `org:system` in `cfn-tags.json`; GitHub Settings → Custom properties → `system`. |
+| Environment | Catalog environment filtered by the chosen system; narrows the cloud-account picker. | Scaffolder selection only: not written to a generated file. The `main` workflow's deploy job uses the GitHub environment `production`. |
+| Account ID | Catalog cloud-account resource related to the environment; its `metadata.title` must contain the AWS account ID. | `spec.dependsOn` in `catalog-info.yaml`; repository secret `DEPLOYMENT_ACCOUNT_ID` holds the title. GitHub does not reveal saved secret values; confirm the entity's title before creation. |
+| Cluster | A `container-cluster` component in the selected system. | `spec.dependsOn` in `catalog-info.yaml`; the third segment of each `Cluster*` SSM path in `cfn-parameters.json`. |
 
-The Component's `spec.lifecycle` is `production`; its catalog namespace comes
-from the hidden namespace default. The repository is created with `main` as
-the default branch. The publisher configuration disables default-branch
-protection and sets the required approving review count to zero; apply your
-organization's review policy before development.
+Hidden defaults are namespace `default` (written to `metadata.namespace`),
+lifecycle `production`, and GitHub organization `ServerlessOpsIO`. The
+component's `spec.type` is `container-service`.
 
-## Page 2: Container Configuration
+The cluster SSM paths are built from **this service's** domain and system, the
+cluster's entity name, and a fixed `main` branch segment:
+`/<domain>/<system>/<cluster>/main/<parameter>`. The cluster must therefore be
+deployed from `main` with the same domain and system, in the same account and
+region as this service.
+
+Choosing an Environment does not configure a matching GitHub environment.
+
+## Page 2: Container Configuration (image-based service)
 
 | Input | Purpose | Where to see it after creation |
 | --- | --- | --- |
-| Container Image | Container image repository to run. Supply the image repository URI expected by ECS; the template appends the tag. | `ContainerImage` in `cfn-parameters.json`; the task definition's container `Image` in `template.yaml`. |
-| Container Tag | Image tag; defaults to `latest`. | `ContainerTag` in `cfn-parameters.json`; appended to the image repository in the task definition. For repeatable deployments, prefer an immutable tag rather than `latest`. |
-| Container CPU shares | CPU allocation units; defaults to `1024` (one vCPU). | `ContainerCpu` in `cfn-parameters.json` and `TaskDefinition.Properties.Cpu` in `template.yaml`. |
-| Container Memory | Task memory in MB; defaults to `2048`. | `ContainerMemory` in `cfn-parameters.json` and `TaskDefinition.Properties.Memory` in `template.yaml`. Choose a CPU/memory combination supported by Fargate. |
-| Container Count | Desired number of running tasks; defaults to `3`. The form notes that production services typically run one per Availability Zone (often three). | `ContainerDesiredCount` in `cfn-parameters.json` and `Service.Properties.DesiredCount` in `template.yaml`. |
+| Container Image | Image repository to run, for example an ECR repository URI, without a tag. | `ContainerImage` in `cfn-parameters.json`; the application container's `Image` in `template.yaml` as `<image>:<tag>`. |
+| Container Tag | Image tag; defaults to `latest`. Prefer an immutable version tag. | `ContainerTag` in `cfn-parameters.json`. |
+| Container CPU shares | Task CPU units; defaults to `1024` (one vCPU). | `ContainerCpu` in `cfn-parameters.json`; `TaskDefinition.Properties.Cpu`. |
+| Container Memory | Task memory in MB; defaults to `2048`. | `ContainerMemory` in `cfn-parameters.json`; `TaskDefinition.Properties.Memory`. |
+| Container Count | Desired number of tasks; defaults to `3`, one per Availability Zone. | `ContainerDesiredCount` in `cfn-parameters.json`; `Service.Properties.DesiredCount`. |
 
-The task runs on Linux Fargate with the X86_64 CPU architecture. The generated
-task definition does not add application-specific environment variables,
-secrets, or container health checks by default; configure these in
-`template.yaml` if the application requires them.
+## Page 2: ECS Service Configuration (development application)
+
+| Input | Purpose | Where to see it after creation |
+| --- | --- | --- |
+| Application Language | `nodejs` (default) or `python`. | With `nodejs`, the Node.js starter in `src/` and the Node.js setup, compile, test, and lint steps in both workflows. **`python` has no starter yet**: no `src/` is generated, so the image build fails until you add `src/Dockerfile`. |
+| Container CPU shares, Container Memory, Container Count | As above. | As above. |
+
+The development variant has no image or tag inputs. `cfn-parameters.json`
+resolves them at deployment from the workflow (`AWS_ECR_REPO` secret,
+repository owner and name, and commit SHA).
+
+Task CPU and memory must form a valid Fargate combination, for example 1024
+CPU with 2048–8192 MB. With Datadog enabled, the sidecar takes 256 CPU units
+and 512 MB of the task's allocation.
 
 ## Page 3: Infrastructure Configuration
 
 | Input | Purpose | Where to see it after creation |
 | --- | --- | --- |
-| Enable Datadog integration? | Defaults to enabled. Adds a Datadog Agent sidecar to the task. | Conditional `DatadogApiKey` and `DatadogSite` parameters and `datadog-agent` container in `template.yaml`; values are supplied by deployment secrets. |
-| Use cluster load balancer? | Defaults to enabled. Adds a listener rule and target group using the selected cluster's load balancer. | Conditional load-balancer parameters and `AlbTargetGroup`, `AlbListenerRule`, and service `LoadBalancers` in `template.yaml`. |
-| Container port | Port exposed by the application; required when load balancing is enabled. | `ContainerPort` in `cfn-parameters.json`; task port mapping, Service Connect alias, target group, and security-group ingress in `template.yaml`. |
-| Load balancer path | Listener path pattern; defaults to `*`. For example, `/app/*` routes paths under `/app`. | `AlbRulePath` in `cfn-parameters.json` and the listener rule path condition in `template.yaml`. |
-| Load balancer rule priority | Listener rule priority; defaults to `1`. Lower values are evaluated first. | `AlbRulePriority` in `cfn-parameters.json` and the listener rule in `template.yaml`. Coordinate priorities with other services on the shared listener. |
+| Enable Datadog integration? | Defaults to `true`. Adds the Datadog Agent sidecar. | `DatadogApiKey` and `DatadogSite` in `cfn-parameters.json` and `template.yaml`; the `datadog-agent` container in the task definition. |
+| Use cluster load balancer? | Defaults to `true`. Attaches the service to the cluster's ALB. **Do not select No**; see [Features](01-features.md#load-balancer-disabled-option). | `ClusterAlbListenerArn`, `ClusterAlbSecurityGroupId`, `VpcId`, `AlbRulePath`, and `AlbRulePriority` in `cfn-parameters.json`; `AlbTargetGroup`, `AlbListenerRule`, `ServiceSecurityGroupAlbIngress`, and the service's `LoadBalancers` in `template.yaml`. |
+| Container port | Port the application listens on. Required with the load balancer. | `ContainerPort` in `cfn-parameters.json`; port mapping, Service Connect alias, target group, and ingress rule in `template.yaml`. |
+| Load balancer path | Listener path pattern; defaults to `*` (all paths). For example, `/app/*`. | `AlbRulePath` in `cfn-parameters.json`. |
+| Load balancer rule priority | Defaults to `1`. Lower values are evaluated first; must be unique on the cluster listener. | `AlbRulePriority` in `cfn-parameters.json`. |
 
-The service always enables ECS Service Connect and uses the cluster's
-Service Connect namespace. It also always creates a service security group,
-which references the VPC ID, and the Service Connect configuration references
-the container port. In the current template, **turning off the load balancer
-omits both the VPC ID and container-port parameters even though these
-resources still reference them**. Keep the load balancer enabled unless the
-template is changed to provide those values independently.
+The defaults `*` and priority `1` claim **all** traffic on the shared listener
+ahead of every other service, and a second service with priority `1` fails to
+deploy. Choose a specific path and an unused priority when the cluster hosts
+more than one service.
 
-The service uses the cluster's public subnet parameter and sets
-`AssignPublicIp` to `ENABLED`. Review the generated networking configuration
-with your platform team if the service must run without public IP assignment.
-
-## Deployment and generated files
-
-The scaffolder copies the service skeleton and pipeline into the new
-repository, publishes it as a **public** repository, stores
-`DEPLOYMENT_ACCOUNT_ID`, and registers `catalog-info.yaml` in Backstage.
-
-| File | What it configures |
-| --- | --- |
-| `template.yaml` | Fargate task definition, ECS service, IAM roles, security group, Service Connect, CloudWatch logs, and optional load-balancer resources. |
-| `cfn-parameters.json` | Deployment parameters, including selected cluster SSM paths, image, task sizing, and optional integration/load-balancer settings. |
-| `cfn-tags.json` | Domain, system, and component CloudFormation tags. |
-| `samconfig.toml` | SAM stack name and build, validation, and deploy defaults. |
-| `catalog-info.yaml` | Backstage Component metadata, ownership, system, cluster dependency, and account dependency. |
-| `.github/workflows/main.yml` | Validates and builds the SAM template on pushes to `main`; builds the container image when the pipeline is configured to do so; deploys the SAM application. |
-| `.github/workflows/branch.yml` | Validates and builds the SAM template on non-`main` branches; it does not include a deployment job. |
-
-The workflows require `AWS_CICD_ACCOUNT_ID` and use the
-`DEPLOYMENT_ACCOUNT_ID` secret created by scaffolding. With Datadog enabled,
-the deployment also expects `DATADOG_AGENT_API_KEY` and `DATADOG_SITE` secrets.
-The `main` workflow deploys to the GitHub environment `production`, even when
-a different catalog Environment was selected in the form. The branch workflow
-builds but does not deploy.
-
-The container pipeline references the image URI and tag as separate values.
-Verify that the deploy account and ECS task execution role can pull the image
-before expecting the service to start successfully.
+These values are copied into generated files at creation time. If you change
+the port, path, or priority later, update `cfn-parameters.json` and the
+application together.
 
 ## Review and create
 
-Before submitting, review the generated repository name, catalog owner and
-relationships, AWS account, cluster, image URI and tag, task sizing, and
-load-balancer route. The scaffolder then:
+Review the form summary, especially the service name, system, cluster,
+account, image, port, path, and priority, before submitting. The scaffolder
+then:
 
-1. Fetches the selected owner, domain, system, account, and cluster catalog
-   entities.
-2. Renders the ECS service skeleton and GitHub Actions workflows.
-3. Publishes the repository to `ServerlessOpsIO` with `main` as the default
-   branch and saves `DEPLOYMENT_ACCOUNT_ID`.
+1. Fetches the selected owner, domain, system, account, and cluster entities.
+2. Renders the service infrastructure, handbook, and GitHub Actions workflows,
+   plus the Node.js starter for a Node.js development application.
+3. Publishes a **public** repository in `ServerlessOpsIO` with `main` as the
+   default branch, sets `DEPLOYMENT_ACCOUNT_ID`, and sets the `system`,
+   `domain`, and `owner` custom properties.
 4. Registers the generated Component in Backstage.
 
-After creation, confirm the Component's catalog relationships, review the
-repository's branch protection and deployment environment policies, and verify
-the required GitHub secrets and AWS image-pull access before relying on the
-first deployment.
+Default branch protection is disabled and the required approving review count
+is zero in the publisher configuration; apply your review policy before
+development.
+
+## After creation
+
+- Confirm catalog ownership and relationships, including the cluster
+  dependency.
+- Complete the [deployment prerequisites](03-configuration.md#deployment-prerequisites).
+  The initial commit to `main` starts a deployment immediately, and without the
+  required secrets or a pullable image it fails.
+- Review [branch behavior](05-ci-cd.md#feature-branches-and-stack-identity)
+  before pushing additional branches.
+- Open the component's **Docs** tab, or read `docs/handbook/00-index.md` in the
+  repository, and request human review of the generated handbook.
