@@ -2,91 +2,122 @@
 
 ## ECS cluster
 
-`template.yaml` creates one `AWS::ECS::Cluster`. The template does not set a
-cluster name, so CloudFormation generates one from the stack name and logical
-ID; consuming services discover it through SSM rather than by a fixed name.
+`template.yaml` creates one `AWS::ECS::Cluster`, the shared placement boundary
+for the services of the **${{ values.system_title }}** system. The template
+does not set a cluster name, so CloudFormation generates one from the stack
+name and logical ID. Services find it through the
+[SSM integration contract](#ssm-integration-contract), not by a fixed name.
 
-The cluster stack provisions the shared boundary and integration values only.
-It does **not** create ECS services, task definitions, container images,
-capacity providers, EC2 container instances, autoscaling, or service-level
-security groups. The ECS service template runs tasks with the Fargate launch
-type, which needs no cluster-managed capacity.
-
-The template does not set `ClusterSettings`, so CloudWatch Container Insights
-follows the account's default setting. See [Observability](06-observability.md).
+The stack does **not** create ECS services, task definitions, container images,
+capacity providers, container instances, or autoscaling. Services created from
+the ECS service templates run on Fargate, which needs no cluster-managed
+capacity, and each service stack owns its own task definition, security group,
+and log group.
 
 ## Service Connect namespace
 
-The cluster's `ServiceConnectDefaults.Namespace` is set from the
-`ServiceConnectNamespace` parameter. The scaffolder renders
-`<system-name>.local`, so every cluster in the same system uses the same
-namespace name by default. ECS uses or creates the AWS Cloud Map namespace
-of that name.
+The cluster's Service Connect default namespace is
+**`${{ values.system_name }}.local`**, supplied by the `ServiceConnectNamespace`
+parameter. ECS uses the AWS Cloud Map namespace of that name, creating it if
+it does not exist. The name derives from the system, so another cluster created
+in the same system uses the same namespace name by default.
 
-Services in the cluster register with Service Connect and call each other by
-client alias, for example `<service-component>.<system-name>.local:<port>`.
-Service Connect provides private service-to-service discovery; it is not a
+A service created from the ECS service templates registers under its component
+name, and other services in the namespace call it at:
+
+```text
+<service-component-name>.${{ values.system_name }}.local:<container-port>
+```
+
+Service Connect provides private service-to-service discovery. It is not a
 public DNS name and does not route internet traffic.
 
-## Optional shared Application Load Balancer
+{% if values.create_load_balancer %}
+## Shared Application Load Balancer
 
-When **Create Load Balancer?** is enabled, the template creates:
+The cluster was created with **Create Load Balancer?** enabled, so the stack
+owns one internet-facing Application Load Balancer shared by every service in
+the cluster:
 
 | Resource | Behavior |
 | --- | --- |
-| `EcsAlbSecurityGroup` | Allows inbound TCP 443 from `0.0.0.0/0`. No port 80 ingress or HTTP-to-HTTPS redirect. |
-| `EcsAlb` | Internet-facing Application Load Balancer in the subnets resolved from `/org/networking/VpcPublicSubnets`. |
-| `EcsAlbListener` | HTTPS listener on 443 with the stack's certificate and the default ELB TLS policy. |
-| `SiteCertificate` | DNS-validated ACM certificate for the configured hostname. |
-| `SiteDnsRecord` | Route 53 alias `A` record pointing the hostname at the ALB. |
+| `EcsAlbSecurityGroup` | Allows inbound TCP 443 from `0.0.0.0/0`. There is no port 80 ingress. |
+| `EcsAlb` | Internet-facing ALB in the subnets resolved from `/org/networking/VpcPublicSubnets`. |
+| `EcsAlbListener` | HTTPS listener on 443 using `SiteCertificate` and the default ELB TLS policy. There is no HTTP listener or HTTP-to-HTTPS redirect. |
 
-The listener's default action returns a fixed `200` response with body
-`{ "healthy": true }`. It has no target group. Services that use the shared ALB
-add their own target group and a path-based listener rule with a unique
-priority. Any request that matches no service rule receives the fixed response,
-so a successful response from the hostname does **not** show that a service is
-healthy.
+The listener's default action returns a fixed `200` response with the body
+`{ "healthy": true }`. The cluster stack creates no target groups or rules.
+Each service that uses the load balancer adds its own target group and a
+path-based listener rule with a priority that is unique on this listener.
+
+Any request that matches no service rule receives the fixed response, so a
+successful response from `https://${{ values.hostname }}` does **not** show
+that a service is running or healthy.
+
+See [Common tasks](07-common-tasks.md#connect-an-ecs-service) for choosing
+rule paths and priorities.
 
 ## DNS and TLS
 
-With the ALB enabled, the stack obtains the hosted zone ID through the existing
-SSM parameter `/org/dns/ZoneId`, validates the certificate with DNS records in
-that zone, and creates the alias record. The hosted zone and SSM parameter are
-prerequisites, not resources created by this stack. See
-[Configuration](03-configuration.md).
+The stack creates a DNS-validated ACM certificate and a Route 53 alias `A`
+record for **`${{ values.hostname }}`**, pointing at the load balancer. Every
+service on the load balancer is reached through this one hostname and is
+distinguished by its listener-rule path.
 
-## Load-balancer-disabled option
+The stack obtains the hosted zone ID through the existing SSM parameter
+`/org/dns/ZoneId`. The hosted zone and SSM parameter are prerequisites, not
+resources created by this stack. See [Configuration](03-configuration.md).
+{% else %}
+## No shared load balancer
 
-**Selecting No for Create Load Balancer? does not produce a deployable
-template.** `EcsAlbSecurityGroup` is only rendered when the ALB is enabled, but
-`ClusterAlbSecurityGroupIdSsmParam` is rendered unconditionally and references
-it. CloudFormation rejects the unresolved reference. Fix the template, as
-described in [Common tasks](07-common-tasks.md#change-load-balancer-or-dns-configuration),
-before using that option.
+The cluster was created with **Create Load Balancer?** set to No. The stack
+creates no load balancer, listener, certificate, or DNS record, and services in
+this cluster must be created with **Use cluster load balancer?** set to No.
+They are reachable only through Service Connect.
+
+**The generated `template.yaml` does not pass validation as created.** It
+declares `ClusterAlbSecurityGroupIdSsmParam`, whose value references the
+`EcsAlbSecurityGroup` resource that is only generated with the load balancer.
+`sam validate --lint` fails in the build job, so nothing deploys until you
+remove that resource. See
+[Common tasks](07-common-tasks.md#make-the-template-deployable).
+{% endif %}
 
 ## SSM integration contract
 
-The cluster publishes these String parameters under
-`/<domain>/<system>/<component>/<branch>/`:
+After a deployment from `main`, the stack publishes these String parameters.
+Service stacks read them at deploy time, so they never hard-code generated
+names or ARNs.
 
-| Parameter suffix | Value | Rendered when | Read by the ECS service template |
-| --- | --- | --- | --- |
-| `EcsClusterName` | Generated ECS cluster name. | Always | Always, as `ClusterName` |
-| `ServiceConnectNamespace` | Service Connect namespace name. | Always | Always, as `ClusterServiceConnectNamespace` |
-| `EcsAlbListenerArn` | HTTPS listener ARN. | ALB enabled | When the service uses the load balancer, as `ClusterAlbListenerArn` |
-| `ClusterAlbSecurityGroupId` | ALB security-group ID. | Always (see the disabled-option issue above) | When the service uses the load balancer, as `ClusterAlbSecurityGroupId` |
+| SSM parameter | Value | Read by the ECS service templates |
+| --- | --- | --- |
+| `/${{ values.domain_name }}/${{ values.system_name }}/${{ values.component_name }}/main/EcsClusterName` | Generated ECS cluster name | Always |
+| `/${{ values.domain_name }}/${{ values.system_name }}/${{ values.component_name }}/main/ServiceConnectNamespace` | `${{ values.system_name }}.local` | Always |
+{%- if values.create_load_balancer %}
+| `/${{ values.domain_name }}/${{ values.system_name }}/${{ values.component_name }}/main/EcsAlbListenerArn` | HTTPS listener ARN | When the service uses the cluster load balancer |
+| `/${{ values.domain_name }}/${{ values.system_name }}/${{ values.component_name }}/main/ClusterAlbSecurityGroupId` | Load balancer security group ID | When the service uses the cluster load balancer |
+{%- endif %}
 
-The ECS service template builds these paths from **its own** selected domain
-and system, the selected cluster's entity name, and a fixed `main` branch
-segment. A service can therefore consume a cluster only when the cluster was
-deployed from `main` with the same domain and system. Keep path segments and
-suffixes stable; changing them is a coordinated change with every consumer.
+The path is `/<Domain>/<System>/<Component>/<CodeBranch>/<name>`, built from
+the stack parameters described in [Configuration](03-configuration.md). The ECS
+service templates build the same paths from the service's own domain and
+system, this cluster's catalog entity name, and a fixed `main` segment. A
+service can therefore only consume a cluster that was deployed from `main` in
+the same domain and system.
 
-See [Configuration](03-configuration.md) for parameter sources and
-[Architecture](04-architecture.md) for resource relationships.
+Treat the paths and parameter names as an interface. Changing them is a
+coordinated change with every consuming service; see
+[Common tasks](07-common-tasks.md#change-ssm-parameter-paths).
+
+A service's generated `cfn-parameters.json` also names a
+`.../main/ContainerSecurityGroupId` path. This cluster does not publish that
+parameter, and the service's `template.yaml` declares no stack parameter that
+reads it.
 
 ## CI/CD
 
-GitHub Actions supplies one workflow, `main.yml`, which validates and builds the
-SAM template and deploys it on pushes to `main` or manual dispatch. There is no
-branch workflow. See [CI/CD pipeline](05-ci-cd.md).
+GitHub Actions supplies one workflow, `main.yml`. It validates and builds the
+SAM template, then deploys it, on every push to `main` and on manual dispatch.
+There is no branch workflow, and a deployment from any ref other than `main`
+moves the SSM parameters that services depend on.
+See [CI/CD pipeline](05-ci-cd.md) before dispatching the workflow manually.

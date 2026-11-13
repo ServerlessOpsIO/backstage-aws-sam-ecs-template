@@ -6,13 +6,15 @@
 | --- | --- | --- |
 | `.github/workflows/main.yml` (`Main`) | Push to `main` | `workflow_dispatch` |
 
-There is no `pull_request` trigger and no non-main branch workflow. A push to a
-feature branch runs nothing. Manual dispatch can select any ref and still
-**deploys**; select the intended ref carefully.
+There is no `pull_request` trigger and no branch workflow. A push to a feature
+branch starts nothing, so a change is first validated by the pipeline when it
+reaches `main`; run the local checks in
+[Common tasks](07-common-tasks.md#validate-and-deploy-changes) before merging.
+Manual dispatch accepts any ref and **deploys** it; select the ref carefully.
 
-Both jobs run on `ubuntu-latest` and grant `contents: read` and
-`id-token: write`. The latter allows OIDC-based AWS role assumption rather than
-committing long-lived AWS credentials.
+The workflow runs on `ubuntu-latest` and grants jobs `contents: read` and
+`id-token: write`. The latter allows OIDC-based AWS role assumption rather
+than committing long-lived AWS credentials.
 
 ## Build job
 
@@ -22,15 +24,16 @@ The build job executes these steps in order:
 2. `ServerlessOpsIO/gha-assume-aws-credentials@v1` obtains credentials using
    `AWS_CICD_ACCOUNT_ID`.
 3. `aws-actions/setup-sam@v3` installs SAM.
-4. `sam validate --lint` validates the template with CloudFormation linting.
-5. `sam build --parallel --template template.yaml` builds the SAM artifact.
+4. `sam validate --lint` validates infrastructure with CloudFormation linting.
+5. `sam build --parallel --template template.yaml` prepares the template for
+   deployment. There is no code to compile or package.
 6. `ServerlessOpsIO/gha-store-artifacts@v2`, with `use_aws_sam: true`, stores
    the build output for the deploy job.
 
-There are no unit tests because the repository contains no application code.
-`sam validate --lint` does not catch account-specific problems such as missing
-SSM parameters, IAM permissions, or certificate validation. TechDocs generation
-is not a workflow step.
+There are no tests, and TechDocs generation is not a step in this workflow.
+Validation checks the template's structure only. It does not show that the
+`/org/...` SSM parameters exist, that the deployment role has the needed
+permissions, or that the hosted zone can validate a certificate.
 
 ## Deploy job
 
@@ -50,28 +53,58 @@ repository. Confirm the expected IAM roles, region, artifact storage, and
 stack-name behavior against the shared actions' configuration.
 
 See [Configuration](03-configuration.md) for parameter files, tags, secrets,
-and AWS prerequisites. GitHub environment protection rules can require
-deployment approval or restrict which refs deploy.
+AWS prerequisites, and SAM defaults. GitHub environment protection rules can
+require deployment approval or restrict which refs deploy.
 
-## Branch and manual deployment isolation
+## Deploying from other refs
 
-`CodeBranch` becomes an SSM path segment, but `samconfig.toml` sets one
-component-wide stack name and the hostname is fixed. A manual dispatch from
-another ref therefore **updates the same stack**, unless the shared deployment
-action branch-qualifies the stack name, and replaces its SSM
-parameters with ones under a different branch path. Because the stack owns
-those parameters, the `main` path is deleted in that update, and every service
-that reads `/<domain>/<system>/<component>/main/...` fails its next deployment.
+`CodeBranch` is resolved from `$env.GITHUB_REF_SLUG_CS` and is part of every
+SSM parameter name the stack publishes. That does not make a second ref a
+separate deployment:
 
-Do not dispatch from a non-main ref unless you have established a platform
-policy for branch-specific stack names, hostnames, accounts or environments,
-and teardown. There is no branch-deletion cleanup workflow.
+- `samconfig.toml` has one component-wide default stack name.
+{%- if values.create_load_balancer %}
+- `cfn-parameters.json` has one fixed hostname from scaffolding.
+{%- endif %}
+- The workflow always selects the GitHub environment `production`.
+
+Unless the shared deployment action qualifies the stack name by ref, a manual
+dispatch from another ref updates **the same stack**. CloudFormation replaces
+each SSM parameter with one under the new ref's path and deletes the one under
+`.../main/`. Running services are unaffected, but every service that reads the
+`main` path fails its next deployment until the cluster is deployed from `main`
+again.
+
+Restrict the `production` environment to `main`, or establish and verify a
+platform policy before deploying other refs:
+
+1. Give each deployed ref a distinct stack name{% if values.create_load_balancer %} and hostname{% endif %}
+   through the shared deployment action's supported configuration.
+2. Use an appropriate account/environment and OIDC trust policy, with approval
+   rules that prevent unintended production changes.
+3. Decide how services select a cluster that is not published under `main`;
+   the ECS service templates only generate `main` paths.
+4. Define teardown for the extra stacks. There is no branch-deletion cleanup
+   workflow.
 
 ## Reviewing a deployment
 
-Inspect the GitHub Actions build and deploy logs, then check the CloudFormation
-stack status, events, and resources. With the ALB, the first deployment waits
-for ACM DNS validation; a long-running `SiteCertificate` usually means the
-hosted zone is wrong or not authoritative. Confirm the SSM parameter values,
-then request the hostname: the fixed `{ "healthy": true }` response confirms
-DNS, TLS, and the listener only. See [Observability](06-observability.md).
+Inspect the GitHub Actions build and deploy logs, then check the deployed
+CloudFormation stack's status, events, and resources. Confirm that the SSM
+parameters listed in [Features](01-features.md#ssm-integration-contract) exist
+in the target account and region and hold this stack's values.
+
+{% if values.create_load_balancer %}
+The first deployment waits for ACM to validate the certificate through DNS. A
+`SiteCertificate` that stays in progress usually means `/org/dns/ZoneId` names
+a zone that is not authoritative for `${{ values.hostname }}`.
+
+Then request `https://${{ values.hostname }}/`. Before any service attaches, the
+fixed `{ "healthy": true }` response confirms DNS, the certificate, and the
+listener. It never establishes that a service is healthy.
+{% else %}
+There is no endpoint to smoke-test. The stack is working when the parameters
+resolve and a service created against this cluster deploys.
+{% endif %}
+Use [Observability](06-observability.md) to investigate the cluster and its
+services after deployment.

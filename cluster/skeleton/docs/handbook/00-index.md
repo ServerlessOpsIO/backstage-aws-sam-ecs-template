@@ -1,16 +1,19 @@
 # Project handbook
 
-This handbook describes the AWS ECS cluster generated for
-**${{ values.component_name }}**. Keep it current as the cluster infrastructure,
-its integration contract, and workflows change.
+This handbook describes the ECS cluster generated for **${{ values.component_name }}**.
+Keep it current as the cluster's infrastructure, integration contract, and workflows change.
 
-- [Features](01-features.md): ECS cluster, Service Connect, optional shared ALB, DNS/TLS, and the SSM integration contract.
+{% if values.create_load_balancer -%}
+- [Features](01-features.md): ECS cluster, Service Connect, shared load balancer, DNS and TLS, and the SSM integration contract.
+{%- else -%}
+- [Features](01-features.md): ECS cluster, Service Connect, and the SSM integration contract.
+{%- endif %}
 - [Creating a component](02-creating-a-component.md): Backstage form pages and generated outputs.
 - [Configuration](03-configuration.md): deployment parameters, tags, and prerequisites.
-- [Architecture](04-architecture.md): AWS resources, request routing, template relationships, and repository layout.
-- [CI/CD pipeline](05-ci-cd.md): build, deployment, and branch caveats.
-- [Observability](06-observability.md): metrics, logging boundaries, and automatic Datadog integration.
-- [Common tasks](07-common-tasks.md): validate, deploy, connect services, and change cluster settings.
+- [Architecture](04-architecture.md): AWS resources, template relationships, and repository layout.
+- [CI/CD pipeline](05-ci-cd.md): build, deployment, and non-main refs.
+- [Observability](06-observability.md): logs, metrics, and automatic Datadog integration.
+- [Common tasks](07-common-tasks.md): connect services and change cluster settings.
 
 ## Reading in Backstage
 
@@ -22,17 +25,15 @@ Open the component in the catalog and select **Docs**.
 The platform must enable the TechDocs frontend and backend and configure either
 on-demand documentation generation or an external builder and publisher. The
 builder needs MkDocs and `mkdocs-techdocs-core` for the `techdocs-core` plugin.
-The generated cluster workflow does not build or publish documentation.
+The generated workflow does not build or publish documentation.
 With the Backstage TechDocs CLI and its Docker prerequisites installed, preview
 from the generated repository root with `techdocs-cli serve`.
 
 The pages can also be read directly in GitHub. Paths shown in backticks are
-relative to the generated repository root. The template source repository
-keeps their inputs under `cluster/skeleton/` and `cluster/pipeline/`.
+relative to the generated repository root.
 
 ## Content review
 
 Before treating this starter handbook as the cluster's operational reference,
-review its network exposure, DNS and TLS configuration, deployment assumptions,
-integration contract, and runbooks against your AWS account and organization
-conventions. Template-generated documentation does not constitute human approval.
+review its network exposure, deployment assumptions, integration contract,
+and runbooks. Template-generated documentation does not constitute human approval.
