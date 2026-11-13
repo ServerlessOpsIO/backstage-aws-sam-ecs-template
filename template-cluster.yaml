@@ -1,0 +1,190 @@
+---
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: aws-sam-ecs-cluster
+  title: AWS ECS Cluster
+  description: |
+    Create an AWS ECS cluster
+
+    Options:
+    * Create application load balancer
+
+  tags:
+    - aws
+    - ecs
+    - container-runtime
+    - containerization
+
+spec:
+  owner: group:00gjdgxs1ur6lsu
+  type: component
+
+  parameters:
+    - title: ECS Cluster Info
+      required:
+        - namespace
+        - name
+        - description
+        - owner
+        - system
+        - domain
+        - environment
+        - account_id
+      properties:
+        namespace:
+          title: Namespace
+          type: string
+          description: Namespace for the component
+          default: default
+          ui:widget: hidden
+        name:
+          title: Cluster name
+          type: string
+          description: Unique name of the cluster. Git repo will be named ${name}-ecs-cluster
+          ui:field: EntityNamePicker
+        description:
+          title: Description
+          type: string
+          description: Short description of the component
+        owner:
+          title: Owner
+          type: string
+          description: |
+            Owning group of entity.
+          ui:field: MyGroupsPicker
+          ui:options:
+            allowArbitraryValues: false
+        domain:
+          title: Domain
+          type: string
+          description: Domain the component belongs to.
+          ui:field: EntityPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              - kind: Domain
+        system:
+          title: System
+          type: string
+          description: System the component belongs to.
+          ui:field: SoContextualEntityPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              - kind: System
+                relations.partOf: "{{ parameters.domain }}"
+        environment:
+          title: Environment
+          type: string
+          description: Environment the component belongs to.
+          ui:field: SoContextualEntityPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              - kind: Resource
+                relations.partOf: "{{ parameters.system }}"
+                spec.type: environment
+        account_id:
+          title: Account ID
+          type: string
+          description: Cloud account to deploy to
+          ui:field: SoContextualEntityPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              - kind: Resource
+                relations.dependencyOf: "{{ parameters.environment }}"
+                spec.type: cloud-account
+    - title: ECS cluster Configuration
+      required:
+        - create_load_balancer
+      properties:
+        create_load_balancer:
+          title: Create Load Balancer?
+          type: boolean
+          description: Whether to create a load balancer for the cluster
+          default: true
+          'ui:widget': 'radio'
+
+      dependencies:
+        create_load_balancer:
+          oneOf:
+            - properties:
+                create_load_balancer:
+                  const: true
+                hostname:
+                  title: Hostname
+                  type: string
+                  description: Site FQDN;  ex. app.sandbox.serverlessops.io
+            - properties:
+                create_load_balancer:
+                  const: false
+
+  steps:
+    - id: fetch
+      name: Fetch Entity References
+      action: catalog:fetch
+      input:
+        entityRefs:
+          - ${{ parameters.owner }}
+          - ${{ parameters.domain }}
+          - ${{ parameters.system }}
+          - ${{ parameters.account_id }}
+
+    - id: cluster
+      name: Create Cluster
+      action: fetch:template
+      input:
+        targetPath: cluster
+        url: ./cluster/skeleton
+        values:
+          component_namespace: ${{ parameters.namespace }}
+          domain_entity: ${{ parameters.domain }}
+          domain_title: ${{ steps.fetch.output.entities[1].metadata.title }}
+          domain_name: ${{ steps.fetch.output.entities[1].metadata.name }}
+          system_entity: ${{ parameters.system }}
+          system_title: ${{ steps.fetch.output.entities[2].metadata.title }}
+          system_name: ${{ steps.fetch.output.entities[2].metadata.name }}
+          component_prefix: ${{ parameters.name | lower }}
+          component_name: ${{ parameters.name | lower }}-ecs-cluster
+          component_description: ${{ parameters.description }}
+          account_entity: ${{ parameters.account_id }}
+          owner: ${{ parameters.owner }}
+          create_load_balancer: ${{ parameters.create_load_balancer }}
+          hostname: ${{ parameters.hostname }}
+
+    - id: cluster-pipeline
+      name: Create Cluster pipeline
+      action: fetch:template
+      input:
+        targetPath: cluster
+        url: ./cluster/pipeline
+
+    - id: publish
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        sourcePath: cluster
+        repoUrl: github.com?repo=${{ parameters.name | lower }}-ecs-cluster&owner=ServerlessOpsIO
+        repoVisibility: public
+        protectDefaultBranch: false
+        requiredApprovingReviewCount: 0
+        description: ${{ parameters.description }}
+        gitAuthorName: ${{ user.entity.spec.profile.displayName }}
+        gitAuthorEmail:  ${{ user.entity.spec.profile.email }}
+        gitCommitMessage: "Initial commit via Backstage"
+        defaultBranch: main
+        secrets:
+          DEPLOYMENT_ACCOUNT_ID: ${{ steps.fetch.output.entities[3].metadata.title }}
+        customProperties:
+          system: ${{ parameters.system | parseEntityRef | pick('name') }}
+          domain: ${{ parameters.domain | parseEntityRef | pick('name') }}
+          owner: ${{ parameters.owner | parseEntityRef | pick('name') }}
+
+    - id: register
+      name: Register in Backstage
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: "/catalog-info.yaml"
