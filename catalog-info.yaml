@@ -1,0 +1,16 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage-aws-sam-ecs-template
+  description: Create ECS clusters and services
+  annotations:
+    github.com/project-slug: ServerlessOpsIO/backstage-aws-sam-ecs-template
+spec:
+  type: template
+  lifecycle: production
+  owner: group:00gjdgxs1ur6lsu
+  system: backstage
+  domain: platform
+  dependsOn:
+    - component:backstage-app
