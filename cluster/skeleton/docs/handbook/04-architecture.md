@@ -298,7 +298,7 @@ prerequisites. Validate changes with `sam validate --lint` before deployment.
 
 ```text
 catalog-info.yaml       Backstage Component entity
-mkdocs.yml              TechDocs site configuration
+docs/index.md           TechDocs home page
 docs/handbook/          Handbook pages
 README.md               Project entry point
 template.yaml           SAM/CloudFormation cluster infrastructure
