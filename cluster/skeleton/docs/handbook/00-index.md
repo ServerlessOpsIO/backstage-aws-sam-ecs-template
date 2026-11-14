@@ -18,16 +18,13 @@ Keep it current as the cluster's infrastructure, integration contract, and workf
 ## Reading in Backstage
 
 The component's `catalog-info.yaml` contains `backstage.io/techdocs-ref: dir:.`.
-TechDocs uses the repository-root `mkdocs.yml` and the Markdown files in
-`docs/handbook/`.
+A central GitHub Actions workflow builds and publishes the documentation from
+`docs/index.md`, the home page, and the Markdown files in `docs/handbook/`.
 Open the component in the catalog and select **Docs**.
 
-The platform must enable the TechDocs frontend and backend and configure either
-on-demand documentation generation or an external builder and publisher. The
-builder needs MkDocs and `mkdocs-techdocs-core` for the `techdocs-core` plugin.
-The generated workflow does not build or publish documentation.
-With the Backstage TechDocs CLI and its Docker prerequisites installed, preview
-from the generated repository root with `techdocs-cli serve`.
+This repository intentionally has no `mkdocs.yml`: the central workflow
+generates the MkDocs configuration when it builds the site, so do not add one
+here. The workflows in this repository do not build or publish documentation.
 
 The pages can also be read directly in GitHub. Paths shown in backticks are
 relative to the generated repository root.

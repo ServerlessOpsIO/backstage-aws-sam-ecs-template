@@ -242,7 +242,7 @@ execution role to give the application access.
 
 ```text
 catalog-info.yaml                  Backstage Component entity
-mkdocs.yml                         TechDocs site configuration
+docs/index.md                      TechDocs home page
 docs/handbook/                     Handbook pages
 README.md                          Project entry point
 template.yaml                      ECS service infrastructure
